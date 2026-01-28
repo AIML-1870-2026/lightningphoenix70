@@ -206,7 +206,8 @@
 
         // Node class
         class Node {
-            constructor() {
+            constructor(index) {
+                this.isYellow = index % 2 === 0;
                 this.reset();
             }
 
@@ -257,14 +258,26 @@
                 const opacity = this.getDepthOpacity();
                 const size = params.nodeSize * scale;
 
+                // Color based on alternating pattern
+                let glowColor1, glowColor2, coreColor;
+                if (this.isYellow) {
+                    glowColor1 = `rgba(255, 230, 100, ${opacity})`;
+                    glowColor2 = `rgba(255, 200, 50, ${opacity * 0.3})`;
+                    coreColor = `rgba(255, 250, 200, ${opacity})`;
+                } else {
+                    glowColor1 = `rgba(100, 180, 255, ${opacity})`;
+                    glowColor2 = `rgba(50, 130, 255, ${opacity * 0.3})`;
+                    coreColor = `rgba(200, 230, 255, ${opacity})`;
+                }
+
                 // Glow effect
                 const gradient = ctx.createRadialGradient(
                     this.x, this.y, 0,
                     this.x, this.y, size * 3
                 );
-                gradient.addColorStop(0, `rgba(255, 230, 100, ${opacity})`);
-                gradient.addColorStop(0.5, `rgba(255, 200, 50, ${opacity * 0.3})`);
-                gradient.addColorStop(1, 'rgba(255, 200, 50, 0)');
+                gradient.addColorStop(0, glowColor1);
+                gradient.addColorStop(0.5, glowColor2);
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, size * 3, 0, Math.PI * 2);
@@ -274,7 +287,7 @@
                 // Core
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(255, 250, 200, ${opacity})`;
+                ctx.fillStyle = coreColor;
                 ctx.fill();
             }
         }
@@ -285,7 +298,7 @@
         function initNodes() {
             nodes = [];
             for (let i = 0; i < params.nodeCount; i++) {
-                nodes.push(new Node());
+                nodes.push(new Node(i));
             }
         }
         initNodes();
@@ -387,7 +400,7 @@
                     if (ctrl.reinit) {
                         // Adjust node count
                         while (nodes.length < params.nodeCount) {
-                            nodes.push(new Node());
+                            nodes.push(new Node(nodes.length));
                         }
                         while (nodes.length > params.nodeCount) {
                             nodes.pop();
