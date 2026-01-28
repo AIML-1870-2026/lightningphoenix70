@@ -204,6 +204,22 @@
             depth: 0.5
         };
 
+        // Panda obstacle in center
+        const panda = {
+            emoji: '🐼',
+            size: 120,
+            get x() { return canvas.width / 2; },
+            get y() { return canvas.height / 2; },
+            get radius() { return this.size * 0.45; } // collision radius
+        };
+
+        function drawPanda() {
+            ctx.font = `${panda.size}px serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(panda.emoji, panda.x, panda.y);
+        }
+
         // Node class
         class Node {
             constructor(index) {
@@ -228,6 +244,26 @@
                 this.x += this.vx * params.speed;
                 this.y += this.vy * params.speed;
                 this.z += this.vz * params.speed;
+
+                // Bounce off panda
+                const dx = this.x - panda.x;
+                const dy = this.y - panda.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < panda.radius) {
+                    // Normalize the direction vector
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+
+                    // Reflect velocity
+                    const dot = this.vx * nx + this.vy * ny;
+                    this.vx = this.vx - 2 * dot * nx;
+                    this.vy = this.vy - 2 * dot * ny;
+
+                    // Push node outside panda
+                    this.x = panda.x + nx * (panda.radius + 2);
+                    this.y = panda.y + ny * (panda.radius + 2);
+                }
 
                 // Wrap around edges
                 if (this.x < 0) this.x = canvas.width;
@@ -364,6 +400,9 @@
             // Clear canvas with fade effect
             ctx.fillStyle = 'rgba(10, 10, 26, 0.2)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw panda in center
+            drawPanda();
 
             // Draw edges first (behind nodes)
             drawEdges();
