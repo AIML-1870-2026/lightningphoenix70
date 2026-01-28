@@ -136,9 +136,9 @@
         <div class="control-group">
             <label>
                 <span>Node Size</span>
-                <span id="nodeSizeValue">3</span>
+                <span id="nodeSizeValue">6</span>
             </label>
-            <input type="range" id="nodeSize" min="1" max="8" value="3">
+            <input type="range" id="nodeSize" min="1" max="12" value="6">
         </div>
 
         <div class="control-group">
@@ -198,7 +198,7 @@
         let params = {
             nodeCount: 100,
             radius: 150,
-            nodeSize: 3,
+            nodeSize: 6,
             edgeOpacity: 0.5,
             speed: 1.0,
             depth: 0.5
@@ -207,7 +207,7 @@
         // Panda obstacle in center
         const panda = {
             emoji: '🐼',
-            size: 120,
+            size: 200,
             get x() { return canvas.width / 2; },
             get y() { return canvas.height / 2; },
             get radius() { return this.size * 0.45; } // collision radius
