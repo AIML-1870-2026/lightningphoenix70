@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Starfield Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        #controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+            min-width: 140px;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+
+        #controls h3 {
+            margin-bottom: 6px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 5px;
+            font-size: 10px;
+            font-weight: normal;
+        }
+
+        .control-group {
+            margin-bottom: 6px;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            font-size: 9px;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 12px;
+            cursor: pointer;
+            accent-color: #4a9eff;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="starfield"></canvas>
+
+    <div id="controls">
+        <h3>Starfield Controls</h3>
+
+        <div class="control-group">
+            <label>
+                <span>Star Count</span>
+                <span id="starCountValue">500</span>
+            </label>
+            <input type="range" id="starCount" min="100" max="2000" value="500">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <span>Speed</span>
+                <span id="speedValue">2</span>
+            </label>
+            <input type="range" id="speed" min="0.5" max="10" step="0.5" value="2">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <span>Trail Length</span>
+                <span id="trailLengthValue">15</span>
+            </label>
+            <input type="range" id="trailLength" min="0" max="50" value="15">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <span>Trail Fade</span>
+                <span id="fadeAlphaValue">0.1</span>
+            </label>
+            <input type="range" id="fadeAlpha" min="0.01" max="0.3" step="0.01" value="0.1">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <span>Star Size</span>
+                <span id="starSizeValue">3</span>
+            </label>
+            <input type="range" id="starSize" min="0.5" max="5" step="0.5" value="3">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <span>Field of View</span>
+                <span id="fovValue">300</span>
+            </label>
+            <input type="range" id="fov" min="100" max="500" value="300">
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+
+        // Configuration
+        const config = {
+            starCount: 500,
+            speed: 2,
+            trailLength: 15,
+            fadeAlpha: 0.1,
+            starSize: 3,
+            fov: 300,
+            maxDepth: 1000
+        };
+
+        let stars = [];
+        let pandas = [];
+
+        // Panda class
+        class Panda {
+            constructor() {
+                this.reset(true);
+            }
+
+            reset(initial = false) {
+                this.x = Math.random() * canvas.width;
+                this.y = initial ? Math.random() * canvas.height : -50;
+                this.size = 30 + Math.random() * 30;
+                this.speedY = 0.5 + Math.random() * 1.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.02;
+                this.wobble = Math.random() * Math.PI * 2;
+                this.wobbleSpeed = 0.02 + Math.random() * 0.02;
+            }
+
+            update() {
+                this.y += this.speedY;
+                this.x += this.speedX + Math.sin(this.wobble) * 0.5;
+                this.rotation += this.rotationSpeed;
+                this.wobble += this.wobbleSpeed;
+
+                if (this.y > canvas.height + 50) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.font = `${this.size}px serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🐼', 0, 0);
+                ctx.restore();
+            }
+        }
+
+        // Star class
+        class Star {
+            constructor() {
+                this.reset(true);
+            }
+
+            reset(initial = false) {
+                this.x = (Math.random() - 0.5) * canvas.width * 2;
+                this.y = (Math.random() - 0.5) * canvas.height * 2;
+                this.z = initial ? Math.random() * config.maxDepth : config.maxDepth;
+                this.prevZ = this.z;
+                this.trail = [];
+                this.screenX = 0;
+                this.screenY = 0;
+                this.size = 0;
+            }
+
+            update() {
+                // Store previous screen position for trail
+                if (this.screenX !== 0 && this.screenY !== 0) {
+                    this.trail.push({
+                        x: this.screenX,
+                        y: this.screenY,
+                        size: this.size
+                    });
+
+                    // Limit trail length
+                    while (this.trail.length > config.trailLength) {
+                        this.trail.shift();
+                    }
+                }
+
+                // Move star toward viewer
+                this.prevZ = this.z;
+                this.z -= config.speed;
+
+                // Reset if star passes viewer
+                if (this.z <= 0) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+
+                // Calculate screen position using perspective projection
+                const scale = config.fov / (config.fov + this.z);
+                this.screenX = centerX + this.x * scale;
+                this.screenY = centerY + this.y * scale;
+                this.size = Math.max(0.5, config.starSize * scale);
+
+                // Check if star is visible
+                if (this.screenX < 0 || this.screenX > canvas.width ||
+                    this.screenY < 0 || this.screenY > canvas.height) {
+                    return;
+                }
+
+                // Draw trail
+                this.drawTrail();
+
+                // Draw star
+                const alpha = Math.min(1, scale * 2);
+                ctx.beginPath();
+                ctx.arc(this.screenX, this.screenY, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(200, 150, 255, ${alpha})`;
+                ctx.fill();
+            }
+
+            drawTrail() {
+                const len = this.trail.length;
+                for (let i = 0; i < len; i++) {
+                    const point = this.trail[i];
+                    const progress = i / len;
+                    const alpha = progress * 0.6;
+                    const size = point.size * progress;
+
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(200, 150, 255, ${alpha})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Initialize stars
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < config.starCount; i++) {
+                stars.push(new Star());
+            }
+        }
+
+        // Animation loop
+        function animate() {
+            // Semi-transparent clearing for ghost trail effect
+            ctx.fillStyle = `rgba(0, 0, 0, ${config.fadeAlpha})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Update and draw stars
+            for (const star of stars) {
+                star.update();
+                star.draw();
+            }
+
+            // Update and draw pandas
+            for (const panda of pandas) {
+                panda.update();
+                panda.draw();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Handle window resize
+        function handleResize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // Clear canvas on resize
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Setup controls
+        function setupControls() {
+            const controls = [
+                { id: 'starCount', prop: 'starCount', reinit: true },
+                { id: 'speed', prop: 'speed', reinit: false },
+                { id: 'trailLength', prop: 'trailLength', reinit: false },
+                { id: 'fadeAlpha', prop: 'fadeAlpha', reinit: false },
+                { id: 'starSize', prop: 'starSize', reinit: false },
+                { id: 'fov', prop: 'fov', reinit: false }
+            ];
+
+            controls.forEach(({ id, prop, reinit }) => {
+                const slider = document.getElementById(id);
+                const display = document.getElementById(id + 'Value');
+
+                slider.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value);
+                    config[prop] = value;
+                    display.textContent = value;
+
+                    if (reinit) {
+                        initStars();
+                    }
+                });
+            });
+        }
+
+        // Debounced resize
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(handleResize, 100);
+        });
+
+        // Initialize pandas
+        function initPandas() {
+            pandas = [];
+            for (let i = 0; i < 10; i++) {
+                pandas.push(new Panda());
+            }
+        }
+
+        // Initialize
+        handleResize();
+        setupControls();
+        initStars();
+        initPandas();
+        animate();
+    </script>
+</body>
+</html>
