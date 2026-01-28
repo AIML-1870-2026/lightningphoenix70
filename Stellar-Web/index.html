@@ -261,9 +261,9 @@
                     this.x, this.y, 0,
                     this.x, this.y, size * 3
                 );
-                gradient.addColorStop(0, `rgba(150, 200, 255, ${opacity})`);
-                gradient.addColorStop(0.5, `rgba(100, 150, 255, ${opacity * 0.3})`);
-                gradient.addColorStop(1, 'rgba(100, 150, 255, 0)');
+                gradient.addColorStop(0, `rgba(255, 230, 100, ${opacity})`);
+                gradient.addColorStop(0.5, `rgba(255, 200, 50, ${opacity * 0.3})`);
+                gradient.addColorStop(1, 'rgba(255, 200, 50, 0)');
 
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, size * 3, 0, Math.PI * 2);
@@ -273,7 +273,7 @@
                 // Core
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(200, 230, 255, ${opacity})`;
+                ctx.fillStyle = `rgba(255, 250, 200, ${opacity})`;
                 ctx.fill();
             }
         }
@@ -317,7 +317,7 @@
                         const opacity = distRatio * params.edgeOpacity * depthOpacity;
 
                         // Color gradient based on distance
-                        const hue = 200 + distRatio * 40; // Blue to cyan
+                        const hue = 45 + distRatio * 15; // Gold to yellow
 
                         ctx.beginPath();
                         ctx.moveTo(nodes[i].x, nodes[i].y);
