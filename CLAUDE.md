@@ -55,3 +55,46 @@ When I say "Show my URLs" or "Where's my stuff?":
 - Main file: `index.html`
 - Assets: lowercase, hyphens (e.g., `particle-system.js`)
 - Assignment folders: Descriptive names or `Assignment-XX`
+
+## Documentation
+
+### Project Specifications
+Every project should have a `spec.md` file that documents:
+
+1. **Overview**: Brief description of what the project does
+2. **Features**: List of main features and functionality
+3. **Controls**: If interactive, document all controls with ranges and defaults
+4. **Visual Design**: Colors, fonts, and styling choices
+5. **Technical Details**: Framework, rendering method, main classes
+6. **Live URL**: Link to the deployed project
+
+### When to Create spec.md
+- After completing a new project
+- When significant features are added
+- Update spec.md when making major changes
+
+### Template
+```markdown
+# Project-Name Specification
+
+## Overview
+[Brief description]
+
+## Features
+- Feature 1
+- Feature 2
+
+## Controls (if applicable)
+| Control | Range | Default | Description |
+|---------|-------|---------|-------------|
+
+## Visual Design
+- Colors, fonts, etc.
+
+## Technical Details
+- **File**: `index.html`
+- **Framework**: [Vanilla/React/etc.]
+
+## Live URL
+https://aiml-1870-2026.github.io/LightningPhoenix70/[ProjectName]/
+```
