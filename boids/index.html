@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boids Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a1a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #ccc;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: rgba(12, 12, 30, 0.95);
+            border-right: 1px solid #223;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            overflow-y: auto;
+            padding: 12px;
+            z-index: 10;
+        }
+        #sidebar h2 {
+            font-size: 15px;
+            color: #7aa4ff;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #223;
+            padding-bottom: 6px;
+        }
+        .section {
+            margin-bottom: 14px;
+        }
+        .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #556;
+            margin-bottom: 6px;
+        }
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .control-row label {
+            font-size: 12px;
+            color: #aab;
+        }
+        .control-row .val {
+            font-size: 11px;
+            color: #7aa4ff;
+            min-width: 30px;
+            text-align: right;
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: #5588ff;
+            margin-top: 2px;
+        }
+        .btn-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        button {
+            background: #1a1a3a;
+            color: #aac;
+            border: 1px solid #334;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        button:hover { background: #2a2a5a; border-color: #5588ff; color: #fff; }
+        button.active { background: #334488; border-color: #5588ff; color: #fff; }
+
+        /* Canvas area */
+        #canvas-wrap {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        canvas {
+            flex: 1;
+            display: block;
+            background: #0d0d20;
+            cursor: crosshair;
+        }
+
+        /* HUD overlay */
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 12px;
+            color: #6a8;
+            line-height: 1.6;
+            pointer-events: none;
+            text-shadow: 0 0 4px rgba(0,0,0,0.8);
+        }
+        #hud span { color: #8cf; }
+
+        /* Charts */
+        #charts {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .mini-chart {
+            background: rgba(10, 10, 26, 0.8);
+            border: 1px solid #223;
+            border-radius: 4px;
+            padding: 4px;
+        }
+        .mini-chart .chart-label {
+            font-size: 9px;
+            color: #667;
+            text-align: center;
+            margin-bottom: 2px;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+        .tooltip .tip-text {
+            visibility: hidden;
+            background: #1a1a3a;
+            color: #aac;
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #334;
+            position: absolute;
+            z-index: 100;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .tooltip:hover .tip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        #info-bar {
+            font-size: 11px;
+            color: #445;
+            text-align: center;
+            padding: 4px;
+            background: rgba(10,10,26,0.9);
+            border-top: 1px solid #223;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h2>Boids Simulation</h2>
+
+        <div class="section">
+            <div class="section-title">Steering Forces</div>
+            <div class="control-row">
+                <label class="tooltip">Separation<span class="tip-text">Desire to maintain personal space</span></label>
+                <span class="val" id="sepVal">1.5</span>
+            </div>
+            <input type="range" id="sep" min="0" max="5" step="0.1" value="1.5">
+
+            <div class="control-row">
+                <label class="tooltip">Alignment<span class="tip-text">Desire to point in the same direction</span></label>
+                <span class="val" id="aliVal">1.0</span>
+            </div>
+            <input type="range" id="ali" min="0" max="5" step="0.1" value="1.0">
+
+            <div class="control-row">
+                <label class="tooltip">Cohesion<span class="tip-text">Desire to stay near center of group</span></label>
+                <span class="val" id="cohVal">1.0</span>
+            </div>
+            <input type="range" id="coh" min="0" max="5" step="0.1" value="1.0">
+        </div>
+
+        <div class="section">
+            <div class="section-title">Parameters</div>
+            <div class="control-row">
+                <label class="tooltip">Neighbor Radius<span class="tip-text">Detection distance for other boids</span></label>
+                <span class="val" id="perVal">60</span>
+            </div>
+            <input type="range" id="per" min="20" max="200" step="5" value="60">
+
+            <div class="control-row">
+                <label class="tooltip">Max Speed<span class="tip-text">Maximum velocity magnitude</span></label>
+                <span class="val" id="spdVal">4.0</span>
+            </div>
+            <input type="range" id="spd" min="1" max="12" step="0.5" value="4">
+
+            <div class="control-row">
+                <label class="tooltip">Boid Count<span class="tip-text">Total active entities</span></label>
+                <span class="val" id="countVal">200</span>
+            </div>
+            <input type="range" id="count" min="10" max="800" step="5" value="200">
+        </div>
+
+        <div class="section">
+            <div class="section-title">Presets</div>
+            <div class="btn-row">
+                <button id="presetSchooling">Schooling</button>
+                <button id="presetChaotic">Chaotic Swarm</button>
+                <button id="presetCluster">Tight Cluster</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Boundaries</div>
+            <div class="btn-row">
+                <button id="boundWrap" class="active">Wrap</button>
+                <button id="boundBounce">Bounce</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Obstacles</div>
+            <div class="btn-row">
+                <button id="addObstacle">Add Obstacle</button>
+                <button id="clearObstacles">Clear All</button>
+            </div>
+            <div style="font-size:10px;color:#556;margin-top:2px;">Click canvas to place after pressing Add</div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Controls</div>
+            <div class="btn-row">
+                <button id="pauseBtn">Pause</button>
+                <button id="resetBtn">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-wrap">
+        <canvas id="canvas"></canvas>
+        <div id="hud">
+            FPS: <span id="fpsVal">0</span><br>
+            Boids: <span id="boidCountVal">0</span><br>
+            Avg Speed: <span id="avgSpeedVal">0</span><br>
+            Avg Neighbors: <span id="avgNeighVal">0</span>
+        </div>
+        <div id="charts">
+            <div class="mini-chart">
+                <div class="chart-label">Neighbor Density</div>
+                <canvas id="chartDensity" width="120" height="50"></canvas>
+            </div>
+            <div class="mini-chart">
+                <div class="chart-label">Speed Variance</div>
+                <canvas id="chartSpeed" width="120" height="50"></canvas>
+            </div>
+            <div class="mini-chart">
+                <div class="chart-label">Compactness</div>
+                <canvas id="chartCompact" width="120" height="50"></canvas>
+            </div>
+        </div>
+        <div id="info-bar">Click to attract &middot; Right-click to repel &middot; Shift+Click to place obstacle</div>
+    </div>
+
+    <script>
+    // ===== WORKER CODE (as string, loaded via Blob URL) =====
+    const workerCode = `
+    let boids = [];
+    let params = {};
+    let obstacles = [];
+    let W = 800, H = 600;
+    let boundaryMode = 'wrap';
+
+    // Spatial grid
+    let gridCellSize = 60;
+    let gridCols, gridRows;
+    let grid = [];
+
+    function buildGrid() {
+        gridCellSize = Math.max(30, params.perception || 60);
+        gridCols = Math.ceil(W / gridCellSize);
+        gridRows = Math.ceil(H / gridCellSize);
+        grid = new Array(gridCols * gridRows);
+        for (let i = 0; i < grid.length; i++) grid[i] = [];
+        for (let i = 0; i < boids.length; i++) {
+            const b = boids[i];
+            const col = Math.floor(b.x / gridCellSize);
+            const row = Math.floor(b.y / gridCellSize);
+            const idx = Math.min(gridCols - 1, Math.max(0, col)) + Math.min(gridRows - 1, Math.max(0, row)) * gridCols;
+            grid[idx].push(i);
+        }
+    }
+
+    function getNeighborIndices(bx, by) {
+        const col = Math.floor(bx / gridCellSize);
+        const row = Math.floor(by / gridCellSize);
+        const indices = [];
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                let c = col + dc;
+                let r = row + dr;
+                if (boundaryMode === 'wrap') {
+                    c = ((c % gridCols) + gridCols) % gridCols;
+                    r = ((r % gridRows) + gridRows) % gridRows;
+                } else {
+                    if (c < 0 || c >= gridCols || r < 0 || r >= gridRows) continue;
+                }
+                const cell = grid[c + r * gridCols];
+                if (cell) {
+                    for (let k = 0; k < cell.length; k++) indices.push(cell[k]);
+                }
+            }
+        }
+        return indices;
+    }
+
+    function updateBoids(mouseData) {
+        buildGrid();
+        const perception = params.perception || 60;
+        const sepDist = perception * 0.4;
+        const maxForce = 0.3;
+        const maxSpeed = params.maxSpeed || 4;
+
+        let totalSpeed = 0;
+        let totalNeighbors = 0;
+        let centroidX = 0, centroidY = 0;
+
+        for (let i = 0; i < boids.length; i++) {
+            const b = boids[i];
+            centroidX += b.x;
+            centroidY += b.y;
+
+            let sepX = 0, sepY = 0, sepCount = 0;
+            let aliX = 0, aliY = 0;
+            let cohX = 0, cohY = 0;
+            let neighbors = 0;
+
+            const nearby = getNeighborIndices(b.x, b.y);
+            for (let ni = 0; ni < nearby.length; ni++) {
+                const j = nearby[ni];
+                if (j === i) continue;
+                const other = boids[j];
+                let dx = other.x - b.x;
+                let dy = other.y - b.y;
+
+                // Handle wrapping distances
+                if (boundaryMode === 'wrap') {
+                    if (dx > W / 2) dx -= W;
+                    if (dx < -W / 2) dx += W;
+                    if (dy > H / 2) dy -= H;
+                    if (dy < -H / 2) dy += H;
+                }
+
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < perception && dist > 0) {
+                    aliX += other.vx;
+                    aliY += other.vy;
+                    cohX += b.x + dx;
+                    cohY += b.y + dy;
+                    neighbors++;
+
+                    if (dist < sepDist) {
+                        sepX -= dx / dist;
+                        sepY -= dy / dist;
+                        sepCount++;
+                    }
+                }
+            }
+
+            totalNeighbors += neighbors;
+
+            if (neighbors > 0) {
+                // Alignment steering
+                aliX /= neighbors; aliY /= neighbors;
+                let am = Math.sqrt(aliX * aliX + aliY * aliY);
+                if (am > 0) {
+                    aliX = (aliX / am) * maxSpeed - b.vx;
+                    aliY = (aliY / am) * maxSpeed - b.vy;
+                    am = Math.sqrt(aliX * aliX + aliY * aliY);
+                    if (am > maxForce) { aliX = (aliX / am) * maxForce; aliY = (aliY / am) * maxForce; }
+                }
+
+                // Cohesion steering
+                cohX = cohX / neighbors - b.x;
+                cohY = cohY / neighbors - b.y;
+                let cm = Math.sqrt(cohX * cohX + cohY * cohY);
+                if (cm > 0) {
+                    cohX = (cohX / cm) * maxSpeed - b.vx;
+                    cohY = (cohY / cm) * maxSpeed - b.vy;
+                    cm = Math.sqrt(cohX * cohX + cohY * cohY);
+                    if (cm > maxForce) { cohX = (cohX / cm) * maxForce; cohY = (cohY / cm) * maxForce; }
+                }
+            }
+
+            if (sepCount > 0) {
+                let sm = Math.sqrt(sepX * sepX + sepY * sepY);
+                if (sm > 0) {
+                    sepX = (sepX / sm) * maxSpeed - b.vx;
+                    sepY = (sepY / sm) * maxSpeed - b.vy;
+                    sm = Math.sqrt(sepX * sepX + sepY * sepY);
+                    if (sm > maxForce) { sepX = (sepX / sm) * maxForce; sepY = (sepY / sm) * maxForce; }
+                }
+            }
+
+            b.ax = sepX * (params.separation || 1.5) + aliX * (params.alignment || 1) + cohX * (params.cohesion || 1);
+            b.ay = sepY * (params.separation || 1.5) + aliY * (params.alignment || 1) + cohY * (params.cohesion || 1);
+
+            // Obstacle avoidance with look-ahead whiskers
+            for (let oi = 0; oi < obstacles.length; oi++) {
+                const obs = obstacles[oi];
+                const odx = b.x - obs.x;
+                const ody = b.y - obs.y;
+                const oDist = Math.sqrt(odx * odx + ody * ody);
+                const avoidRadius = obs.r + 30;
+                if (oDist < avoidRadius && oDist > 0) {
+                    const force = 800 / (oDist * oDist);
+                    b.ax += (odx / oDist) * force;
+                    b.ay += (ody / oDist) * force;
+                }
+
+                // Whisker checks
+                const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+                if (speed > 0.1) {
+                    const hdx = b.vx / speed;
+                    const hdy = b.vy / speed;
+                    for (let wl = 10; wl <= 40; wl += 10) {
+                        const wx = b.x + hdx * wl;
+                        const wy = b.y + hdy * wl;
+                        const wdx = wx - obs.x;
+                        const wdy = wy - obs.y;
+                        const wDist = Math.sqrt(wdx * wdx + wdy * wdy);
+                        if (wDist < obs.r + 10 && wDist > 0) {
+                            const wForce = 2.0;
+                            b.ax += (wdx / wDist) * wForce;
+                            b.ay += (wdy / wDist) * wForce;
+                        }
+                    }
+                }
+            }
+
+            // Mouse interaction
+            if (mouseData && mouseData.active) {
+                const mdx = mouseData.x - b.x;
+                const mdy = mouseData.y - b.y;
+                const mDist = Math.sqrt(mdx * mdx + mdy * mdy);
+                if (mDist < 200 && mDist > 0) {
+                    const mForce = mouseData.repel ? -0.8 : 0.5;
+                    b.ax += (mdx / mDist) * mForce;
+                    b.ay += (mdy / mDist) * mForce;
+                }
+            }
+
+            // Bounce boundary force
+            if (boundaryMode === 'bounce') {
+                const margin = 40;
+                const turnForce = 0.5;
+                if (b.x < margin) b.ax += turnForce * (1 - b.x / margin);
+                if (b.x > W - margin) b.ax -= turnForce * (1 - (W - b.x) / margin);
+                if (b.y < margin) b.ay += turnForce * (1 - b.y / margin);
+                if (b.y > H - margin) b.ay -= turnForce * (1 - (H - b.y) / margin);
+            }
+        }
+
+        // Apply velocities
+        let speeds = [];
+        for (let i = 0; i < boids.length; i++) {
+            const b = boids[i];
+            b.vx += b.ax;
+            b.vy += b.ay;
+            let speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+            if (speed > maxSpeed) {
+                b.vx = (b.vx / speed) * maxSpeed;
+                b.vy = (b.vy / speed) * maxSpeed;
+                speed = maxSpeed;
+            }
+            b.x += b.vx;
+            b.y += b.vy;
+            speeds.push(speed);
+            totalSpeed += speed;
+
+            if (boundaryMode === 'wrap') {
+                if (b.x < 0) b.x += W; if (b.x > W) b.x -= W;
+                if (b.y < 0) b.y += H; if (b.y > H) b.y -= H;
+            } else {
+                if (b.x < 0) { b.x = 0; b.vx = Math.abs(b.vx); }
+                if (b.x > W) { b.x = W; b.vx = -Math.abs(b.vx); }
+                if (b.y < 0) { b.y = 0; b.vy = Math.abs(b.vy); }
+                if (b.y > H) { b.y = H; b.vy = -Math.abs(b.vy); }
+            }
+
+            b.hue = (b.hue + 0.05) % 360;
+        }
+
+        // Compute analytics
+        const n = boids.length || 1;
+        centroidX /= n;
+        centroidY /= n;
+        let compactness = 0;
+        for (let i = 0; i < boids.length; i++) {
+            const dx = boids[i].x - centroidX;
+            const dy = boids[i].y - centroidY;
+            compactness += dx * dx + dy * dy;
+        }
+        compactness = Math.sqrt(compactness / n);
+
+        const avgSpeed = totalSpeed / n;
+        let speedVar = 0;
+        for (let i = 0; i < speeds.length; i++) {
+            const d = speeds[i] - avgSpeed;
+            speedVar += d * d;
+        }
+        speedVar = Math.sqrt(speedVar / n);
+
+        // Build transfer data
+        const posData = new Float32Array(boids.length * 5);
+        for (let i = 0; i < boids.length; i++) {
+            posData[i * 5]     = boids[i].x;
+            posData[i * 5 + 1] = boids[i].y;
+            posData[i * 5 + 2] = boids[i].vx;
+            posData[i * 5 + 3] = boids[i].vy;
+            posData[i * 5 + 4] = boids[i].hue;
+        }
+
+        self.postMessage({
+            type: 'frame',
+            positions: posData.buffer,
+            analytics: {
+                avgSpeed: avgSpeed,
+                avgNeighbors: totalNeighbors / n,
+                speedVariance: speedVar,
+                compactness: compactness
+            }
+        }, [posData.buffer]);
+    }
+
+    self.onmessage = function(e) {
+        const msg = e.data;
+        if (msg.type === 'init') {
+            W = msg.width;
+            H = msg.height;
+            params = msg.params;
+            obstacles = msg.obstacles || [];
+            boids = [];
+            for (let i = 0; i < params.count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                boids.push({
+                    x: Math.random() * W,
+                    y: Math.random() * H,
+                    vx: Math.cos(angle) * 2,
+                    vy: Math.sin(angle) * 2,
+                    ax: 0, ay: 0,
+                    hue: Math.random() * 360
+                });
+            }
+        } else if (msg.type === 'params') {
+            params = msg.params;
+            // Sync count
+            while (boids.length < params.count) {
+                const angle = Math.random() * Math.PI * 2;
+                boids.push({
+                    x: Math.random() * W, y: Math.random() * H,
+                    vx: Math.cos(angle) * 2, vy: Math.sin(angle) * 2,
+                    ax: 0, ay: 0, hue: Math.random() * 360
+                });
+            }
+            while (boids.length > params.count) boids.pop();
+        } else if (msg.type === 'obstacles') {
+            obstacles = msg.obstacles;
+        } else if (msg.type === 'boundary') {
+            boundaryMode = msg.mode;
+        } else if (msg.type === 'resize') {
+            W = msg.width;
+            H = msg.height;
+        } else if (msg.type === 'tick') {
+            updateBoids(msg.mouse);
+        }
+    };
+    `;
+
+    // ===== MAIN THREAD =====
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Chart canvases
+    const chartDensityCanvas = document.getElementById('chartDensity');
+    const chartSpeedCanvas = document.getElementById('chartSpeed');
+    const chartCompactCanvas = document.getElementById('chartCompact');
+    const ctxDensity = chartDensityCanvas.getContext('2d');
+    const ctxSpeed = chartSpeedCanvas.getContext('2d');
+    const ctxCompact = chartCompactCanvas.getContext('2d');
+
+    // HUD elements
+    const fpsVal = document.getElementById('fpsVal');
+    const boidCountVal = document.getElementById('boidCountVal');
+    const avgSpeedVal = document.getElementById('avgSpeedVal');
+    const avgNeighVal = document.getElementById('avgNeighVal');
+
+    // Chart data history
+    const CHART_LEN = 120;
+    const densityHistory = new Array(CHART_LEN).fill(0);
+    const speedVarHistory = new Array(CHART_LEN).fill(0);
+    const compactHistory = new Array(CHART_LEN).fill(0);
+
+    // State
+    let params = {
+        count: 200,
+        separation: 1.5,
+        alignment: 1.0,
+        cohesion: 1.0,
+        maxSpeed: 4,
+        perception: 60
+    };
+    let obstacles = [];
+    let boundaryMode = 'wrap';
+    let paused = false;
+    let placingObstacle = false;
+    let currentFrame = null;
+    let pendingTick = false;
+
+    // Mouse
+    let mouse = { x: -1000, y: -1000, active: false, repel: false };
+
+    // Resize canvas
+    function resizeCanvas() {
+        const wrap = document.getElementById('canvas-wrap');
+        canvas.width = wrap.clientWidth;
+        canvas.height = wrap.clientHeight - document.getElementById('info-bar').offsetHeight;
+        worker.postMessage({ type: 'resize', width: canvas.width, height: canvas.height });
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Slider wiring
+    function wireSlider(id, paramKey, displayId, isFloat) {
+        const slider = document.getElementById(id);
+        const display = document.getElementById(displayId);
+        slider.addEventListener('input', () => {
+            const val = isFloat ? parseFloat(slider.value) : parseInt(slider.value);
+            params[paramKey] = val;
+            display.textContent = isFloat ? val.toFixed(1) : val;
+            worker.postMessage({ type: 'params', params });
+        });
+    }
+    wireSlider('sep', 'separation', 'sepVal', true);
+    wireSlider('ali', 'alignment', 'aliVal', true);
+    wireSlider('coh', 'cohesion', 'cohVal', true);
+    wireSlider('per', 'perception', 'perVal', false);
+    wireSlider('spd', 'maxSpeed', 'spdVal', true);
+    wireSlider('count', 'count', 'countVal', false);
+
+    // Apply preset to sliders and params
+    function applyPreset(sep, ali, coh, spd, per) {
+        params.separation = sep;
+        params.alignment = ali;
+        params.cohesion = coh;
+        params.maxSpeed = spd;
+        params.perception = per;
+
+        document.getElementById('sep').value = sep;
+        document.getElementById('sepVal').textContent = sep.toFixed(1);
+        document.getElementById('ali').value = ali;
+        document.getElementById('aliVal').textContent = ali.toFixed(1);
+        document.getElementById('coh').value = coh;
+        document.getElementById('cohVal').textContent = coh.toFixed(1);
+        document.getElementById('spd').value = spd;
+        document.getElementById('spdVal').textContent = spd.toFixed(1);
+        document.getElementById('per').value = per;
+        document.getElementById('perVal').textContent = per;
+
+        worker.postMessage({ type: 'params', params });
+    }
+
+    // Presets
+    document.getElementById('presetSchooling').addEventListener('click', () => applyPreset(1.5, 3.0, 1.5, 4, 80));
+    document.getElementById('presetChaotic').addEventListener('click', () => applyPreset(3.0, 0.0, 0.3, 8, 50));
+    document.getElementById('presetCluster').addEventListener('click', () => applyPreset(1.0, 0.5, 4.0, 3, 40));
+
+    // Boundary toggle
+    document.getElementById('boundWrap').addEventListener('click', function() {
+        boundaryMode = 'wrap';
+        this.classList.add('active');
+        document.getElementById('boundBounce').classList.remove('active');
+        worker.postMessage({ type: 'boundary', mode: 'wrap' });
+    });
+    document.getElementById('boundBounce').addEventListener('click', function() {
+        boundaryMode = 'bounce';
+        this.classList.add('active');
+        document.getElementById('boundWrap').classList.remove('active');
+        worker.postMessage({ type: 'boundary', mode: 'bounce' });
+    });
+
+    // Obstacles
+    document.getElementById('addObstacle').addEventListener('click', () => {
+        placingObstacle = true;
+        canvas.style.cursor = 'cell';
+    });
+    document.getElementById('clearObstacles').addEventListener('click', () => {
+        obstacles = [];
+        worker.postMessage({ type: 'obstacles', obstacles });
+    });
+
+    // Pause / Reset
+    document.getElementById('pauseBtn').addEventListener('click', function() {
+        paused = !paused;
+        this.textContent = paused ? 'Resume' : 'Pause';
+        this.classList.toggle('active', paused);
+    });
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        initWorker();
+    });
+
+    // Mouse events
+    canvas.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+    });
+    canvas.addEventListener('mousedown', e => {
+        e.preventDefault();
+        if (placingObstacle) {
+            const rect = canvas.getBoundingClientRect();
+            const ox = e.clientX - rect.left;
+            const oy = e.clientY - rect.top;
+            obstacles.push({ x: ox, y: oy, r: 25 });
+            worker.postMessage({ type: 'obstacles', obstacles });
+            placingObstacle = false;
+            canvas.style.cursor = 'crosshair';
+            return;
+        }
+        if (e.shiftKey) {
+            const rect = canvas.getBoundingClientRect();
+            obstacles.push({ x: e.clientX - rect.left, y: e.clientY - rect.top, r: 25 });
+            worker.postMessage({ type: 'obstacles', obstacles });
+            return;
+        }
+        mouse.active = true;
+        mouse.repel = e.button === 2;
+    });
+    canvas.addEventListener('mouseup', () => { mouse.active = false; });
+    canvas.addEventListener('mouseleave', () => { mouse.active = false; });
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Worker message handler
+    worker.onmessage = function(e) {
+        const msg = e.data;
+        if (msg.type === 'frame') {
+            currentFrame = {
+                positions: new Float32Array(msg.positions),
+                analytics: msg.analytics
+            };
+            pendingTick = false;
+        }
+    };
+
+    // Init worker
+    function initWorker() {
+        resizeCanvas();
+        worker.postMessage({
+            type: 'init',
+            width: canvas.width,
+            height: canvas.height,
+            params,
+            obstacles
+        });
+    }
+
+    // FPS tracking
+    let frameCount = 0;
+    let lastFpsTime = performance.now();
+    let currentFps = 0;
+
+    // Draw mini chart
+    function drawChart(chartCtx, data, color, maxVal) {
+        const w = 120, h = 50;
+        chartCtx.clearRect(0, 0, w, h);
+        chartCtx.fillStyle = 'rgba(10, 10, 26, 0.6)';
+        chartCtx.fillRect(0, 0, w, h);
+
+        if (maxVal <= 0) maxVal = 1;
+        chartCtx.strokeStyle = color;
+        chartCtx.lineWidth = 1.5;
+        chartCtx.beginPath();
+        for (let i = 0; i < data.length; i++) {
+            const x = (i / (data.length - 1)) * w;
+            const y = h - (Math.min(data[i], maxVal) / maxVal) * (h - 4) - 2;
+            if (i === 0) chartCtx.moveTo(x, y);
+            else chartCtx.lineTo(x, y);
+        }
+        chartCtx.stroke();
+    }
+
+    // Draw spikes on obstacle
+    function drawSpikedObstacle(x, y, r) {
+        const spikes = 10;
+        const outerR = r + 8;
+        const innerR = r;
+
+        ctx.save();
+        ctx.fillStyle = '#ff6b9d';
+        ctx.shadowColor = '#ff6b9d';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        for (let i = 0; i < spikes * 2; i++) {
+            const angle = (i * Math.PI) / spikes - Math.PI / 2;
+            const rad = i % 2 === 0 ? outerR : innerR;
+            const sx = x + Math.cos(angle) * rad;
+            const sy = y + Math.sin(angle) * rad;
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Inner circle
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#cc4477';
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // Render loop
+    function render() {
+        requestAnimationFrame(render);
+
+        // Send tick if worker is ready
+        if (!paused && !pendingTick) {
+            pendingTick = true;
+            worker.postMessage({
+                type: 'tick',
+                mouse: { x: mouse.x, y: mouse.y, active: mouse.active, repel: mouse.repel }
+            });
+        }
+
+        // Draw
+        ctx.fillStyle = 'rgba(13, 13, 32, 0.3)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Bounce boundary glow
+        if (boundaryMode === 'bounce') {
+            const margin = 40;
+            const grad = ctx.createLinearGradient(0, 0, margin, 0);
+            grad.addColorStop(0, 'rgba(85, 136, 255, 0.15)');
+            grad.addColorStop(1, 'rgba(85, 136, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, margin, canvas.height);
+
+            const grad2 = ctx.createLinearGradient(canvas.width, 0, canvas.width - margin, 0);
+            grad2.addColorStop(0, 'rgba(85, 136, 255, 0.15)');
+            grad2.addColorStop(1, 'rgba(85, 136, 255, 0)');
+            ctx.fillStyle = grad2;
+            ctx.fillRect(canvas.width - margin, 0, margin, canvas.height);
+
+            const grad3 = ctx.createLinearGradient(0, 0, 0, margin);
+            grad3.addColorStop(0, 'rgba(85, 136, 255, 0.15)');
+            grad3.addColorStop(1, 'rgba(85, 136, 255, 0)');
+            ctx.fillStyle = grad3;
+            ctx.fillRect(0, 0, canvas.width, margin);
+
+            const grad4 = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - margin);
+            grad4.addColorStop(0, 'rgba(85, 136, 255, 0.15)');
+            grad4.addColorStop(1, 'rgba(85, 136, 255, 0)');
+            ctx.fillStyle = grad4;
+            ctx.fillRect(0, canvas.height - margin, canvas.width, margin);
+        }
+
+        // Draw obstacles
+        for (const obs of obstacles) {
+            drawSpikedObstacle(obs.x, obs.y, obs.r);
+        }
+
+        // Draw boids
+        if (currentFrame) {
+            const pos = currentFrame.positions;
+            const count = pos.length / 5;
+
+            for (let i = 0; i < count; i++) {
+                const x = pos[i * 5];
+                const y = pos[i * 5 + 1];
+                const vx = pos[i * 5 + 2];
+                const vy = pos[i * 5 + 3];
+                const hue = pos[i * 5 + 4];
+
+                const angle = Math.atan2(vy, vx);
+                const speed = Math.sqrt(vx * vx + vy * vy);
+                const alpha = 0.5 + 0.5 * (speed / (params.maxSpeed || 4));
+                const size = 6;
+
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(angle);
+
+                ctx.fillStyle = `hsla(${hue}, 80%, 65%, ${alpha})`;
+                ctx.shadowColor = `hsla(${hue}, 90%, 60%, 0.3)`;
+                ctx.shadowBlur = 5;
+
+                ctx.beginPath();
+                ctx.moveTo(size, 0);
+                ctx.lineTo(-size * 0.6, size * 0.5);
+                ctx.lineTo(-size * 0.3, 0);
+                ctx.lineTo(-size * 0.6, -size * 0.5);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+                ctx.restore();
+            }
+
+            // Update HUD
+            const a = currentFrame.analytics;
+            boidCountVal.textContent = count;
+            avgSpeedVal.textContent = a.avgSpeed.toFixed(1);
+            avgNeighVal.textContent = a.avgNeighbors.toFixed(1);
+
+            // Push to chart histories
+            densityHistory.push(a.avgNeighbors);
+            densityHistory.shift();
+            speedVarHistory.push(a.speedVariance);
+            speedVarHistory.shift();
+            compactHistory.push(a.compactness);
+            compactHistory.shift();
+        }
+
+        // FPS
+        frameCount++;
+        const now = performance.now();
+        if (now - lastFpsTime >= 500) {
+            currentFps = Math.round(frameCount / ((now - lastFpsTime) / 1000));
+            fpsVal.textContent = currentFps;
+            frameCount = 0;
+            lastFpsTime = now;
+        }
+
+        // Draw charts
+        const maxDensity = Math.max(1, ...densityHistory);
+        drawChart(ctxDensity, densityHistory, '#5588ff', maxDensity);
+        const maxSpeedVar = Math.max(0.5, ...speedVarHistory);
+        drawChart(ctxSpeed, speedVarHistory, '#ff8855', maxSpeedVar);
+        const maxCompact = Math.max(50, ...compactHistory);
+        drawChart(ctxCompact, compactHistory, '#55cc88', maxCompact);
+    }
+
+    // Start
+    initWorker();
+    render();
+    </script>
+</body>
+</html>
