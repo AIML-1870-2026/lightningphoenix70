@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Julia Set Explorer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    overflow: hidden;
+    background: #000;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    cursor: crosshair;
+}
+
+/* ── Panel base ── */
+.panel {
+    position: fixed;
+    z-index: 10;
+    border-radius: 12px;
+    padding: 14px 18px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: background 0.3s, color 0.3s, border-color 0.3s;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+/* Dark mode (default) */
+body.dark .panel {
+    background: rgba(0,0,0,0.75);
+    color: #f0f0f0;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+body.dark .panel h2, body.dark .panel h3 { color: #f0f0f0; }
+body.dark .panel label { color: #ccc; }
+
+/* Light mode */
+body.light .panel {
+    background: rgba(255,255,255,0.85);
+    color: #111;
+    border: 1px solid rgba(0,0,0,0.15);
+}
+body.light .panel h2, body.light .panel h3 { color: #111; }
+body.light .panel label { color: #333; }
+
+/* ── Top-left: Title ── */
+#title-panel {
+    top: 16px; left: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+}
+#title-panel h1 {
+    font-size: 1.25rem;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+#theme-toggle {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: border-color 0.3s;
+}
+body.dark #theme-toggle { color: #f0f0f0; border-color: rgba(255,255,255,0.3); }
+body.light #theme-toggle { color: #111; border-color: rgba(0,0,0,0.3); }
+
+/* ── Top-right: Presets ── */
+#preset-panel {
+    top: 16px; right: 16px;
+    min-width: 200px;
+}
+#preset-panel h2 {
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+#preset-panel h2 .arrow {
+    transition: transform 0.3s;
+    display: inline-block;
+}
+#preset-panel h2 .arrow.open { transform: rotate(90deg); }
+#preset-list {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+}
+#preset-list.open { display: flex; }
+
+.preset-btn {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s, border-color 0.2s;
+    font-size: 0.85rem;
+}
+body.dark .preset-btn { color: #e0e0e0; border-color: rgba(255,255,255,0.1); }
+body.light .preset-btn { color: #222; background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.1); }
+.preset-btn:hover { background: rgba(96,165,250,0.25); border-color: rgba(96,165,250,0.5); }
+.preset-btn .preset-name { font-weight: 600; }
+.preset-btn .preset-desc { font-size: 0.75rem; opacity: 0.7; margin-top: 2px; }
+
+/* ── Bottom-left: Math ── */
+#math-panel {
+    bottom: 16px; left: 16px;
+    max-width: 380px;
+}
+#math-panel h2 {
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#math-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+#math-content.collapsed { display: none; }
+.math-equation {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+.math-c {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.95rem;
+}
+.math-desc {
+    font-style: italic;
+    opacity: 0.8;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+.math-info {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.82rem;
+    opacity: 0.9;
+}
+
+/* ── Bottom-right: Controls ── */
+#controls-panel {
+    bottom: 16px; right: 16px;
+    min-width: 260px;
+}
+#controls-panel h2 {
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+}
+.control-group {
+    margin-bottom: 10px;
+}
+.control-group label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+}
+.control-group label span.val {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.8rem;
+    min-width: 60px;
+    text-align: right;
+}
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+body.dark input[type="range"] { background: rgba(255,255,255,0.15); }
+body.light input[type="range"] { background: rgba(0,0,0,0.15); }
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+}
+body.dark input[type="range"]::-webkit-slider-thumb { background: #60a5fa; }
+body.light input[type="range"]::-webkit-slider-thumb { background: #2563eb; }
+input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+}
+body.dark input[type="range"]::-moz-range-thumb { background: #60a5fa; }
+body.light input[type="range"]::-moz-range-thumb { background: #2563eb; }
+
+/* Color swatches */
+.color-swatches {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+.color-swatch {
+    width: 36px; height: 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s, transform 0.15s;
+}
+.color-swatch:hover { transform: scale(1.1); }
+.color-swatch.active { border-color: #60a5fa; transform: scale(1.1); }
+.swatch-classic { background: linear-gradient(90deg, #000, #1e40af, #60a5fa, #fff); }
+.swatch-fire { background: linear-gradient(90deg, #000, #b91c1c, #f97316, #fde047); }
+.swatch-electric { background: linear-gradient(90deg, #1e0836, #7c3aed, #06b6d4, #fff); }
+.swatch-mono { background: linear-gradient(90deg, #000, #888, #fff); }
+.swatch-pastel { background: linear-gradient(90deg, #fbb6ce, #c4b5fd, #a7f3d0, #fef08a); }
+
+/* Reset button */
+#reset-btn {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background 0.2s;
+    margin-top: 4px;
+}
+body.dark #reset-btn { background: rgba(255,255,255,0.1); color: #f0f0f0; border-color: rgba(255,255,255,0.2); }
+body.light #reset-btn { background: rgba(0,0,0,0.08); color: #111; border-color: rgba(0,0,0,0.2); }
+#reset-btn:hover { background: rgba(96,165,250,0.3); }
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+    .panel { padding: 10px 12px; border-radius: 10px; }
+    #title-panel h1 { font-size: 1rem; }
+    #preset-panel { min-width: 160px; }
+    #controls-panel { min-width: 220px; }
+    #math-panel { max-width: 260px; }
+
+    .panel.collapsed-mobile {
+        padding: 8px 12px;
+        min-width: unset;
+        max-width: unset;
+    }
+    .panel.collapsed-mobile .panel-body { display: none; }
+    .panel.collapsed-mobile h2 .arrow { display: none; }
+}
+</style>
+</head>
+<body class="dark">
+
+<canvas id="canvas"></canvas>
+
+<!-- Top-left: Title & Theme -->
+<div id="title-panel" class="panel">
+    <h1>Julia Set Explorer</h1>
+    <button id="theme-toggle" title="Toggle light/dark mode">🌙</button>
+</div>
+
+<!-- Top-right: Presets -->
+<div id="preset-panel" class="panel">
+    <h2 id="preset-toggle">Presets <span class="arrow">▶</span></h2>
+    <div id="preset-list"></div>
+</div>
+
+<!-- Bottom-left: Math -->
+<div id="math-panel" class="panel">
+    <h2 id="math-toggle">Math <span class="arrow open">▶</span></h2>
+    <div id="math-content">
+        <div class="math-equation">f(z) = z&sup2; + c</div>
+        <div class="math-c" id="math-c-display">c = −0.7269 + 0.1889i</div>
+        <div class="math-desc">"The Julia Set is the boundary between points that escape to infinity and points that remain bounded under repeated application of f(z)."</div>
+        <div class="math-info" id="math-zoom">Zoom: 1.00×</div>
+        <div class="math-info" id="math-center">Center: (0.0000, 0.0000)</div>
+    </div>
+</div>
+
+<!-- Bottom-right: Controls -->
+<div id="controls-panel" class="panel">
+    <h2>Controls</h2>
+    <div class="control-group">
+        <label>Real (c) <span class="val" id="real-val">−0.7269</span></label>
+        <input type="range" id="slider-real" min="-2" max="2" step="0.0001" value="-0.7269">
+    </div>
+    <div class="control-group">
+        <label>Imaginary (c) <span class="val" id="imag-val">0.1889</span></label>
+        <input type="range" id="slider-imag" min="-2" max="2" step="0.0001" value="0.1889">
+    </div>
+    <div class="control-group">
+        <label>Max Iterations <span class="val" id="iter-val">200</span></label>
+        <input type="range" id="slider-iter" min="50" max="1000" step="1" value="200">
+    </div>
+    <div class="control-group">
+        <label>Color Theme</label>
+        <div class="color-swatches">
+            <div class="color-swatch swatch-classic active" data-scheme="0" title="Classic"></div>
+            <div class="color-swatch swatch-fire" data-scheme="1" title="Fire"></div>
+            <div class="color-swatch swatch-electric" data-scheme="2" title="Electric"></div>
+            <div class="color-swatch swatch-mono" data-scheme="3" title="Monochrome"></div>
+            <div class="color-swatch swatch-pastel" data-scheme="4" title="Pastel"></div>
+        </div>
+    </div>
+    <button id="reset-btn">Reset View</button>
+</div>
+
+<script>
+// ── WebGL Setup ──
+const canvas = document.getElementById('canvas');
+const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
+
+if (!gl) {
+    document.body.innerHTML = '<div style="color:#fff;padding:40px;font-size:1.2rem;">WebGL is not supported in your browser.</div>';
+    throw new Error('WebGL not supported');
+}
+
+// ── State ──
+const defaults = {
+    cReal: -0.7269,
+    cImag: 0.1889,
+    zoom: 1.0,
+    centerX: 0.0,
+    centerY: 0.0,
+    maxIter: 200,
+    colorScheme: 0
+};
+
+let state = { ...defaults };
+let isDragging = false;
+let dragStartX = 0, dragStartY = 0;
+let dragStartCenterX = 0, dragStartCenterY = 0;
+let animationId = null;
+
+// ── Shaders ──
+const vertexShaderSource = `
+attribute vec2 a_position;
+void main() {
+    gl_Position = vec4(a_position, 0.0, 1.0);
+}
+`;
+
+const fragmentShaderSource = `
+precision highp float;
+
+uniform vec2 u_resolution;
+uniform vec2 u_c;
+uniform float u_zoom;
+uniform vec2 u_center;
+uniform int u_maxIter;
+uniform int u_colorScheme;
+
+vec3 classicColor(float t) {
+    // blue to white
+    float r = 0.0 + t * 1.0;
+    float g = 0.0 + t * 0.7 + 0.3 * t * t;
+    float b = 0.3 + t * 0.7;
+    return vec3(
+        min(r, 1.0),
+        min(g, 1.0),
+        min(b, 1.0)
+    );
+}
+
+vec3 fireColor(float t) {
+    // black -> red -> orange -> yellow
+    float r = clamp(t * 3.0, 0.0, 1.0);
+    float g = clamp(t * 3.0 - 1.0, 0.0, 1.0);
+    float b = clamp(t * 3.0 - 2.0, 0.0, 0.3);
+    return vec3(r, g, b);
+}
+
+vec3 electricColor(float t) {
+    // dark purple -> cyan -> white
+    vec3 a = vec3(0.12, 0.03, 0.21);
+    vec3 b = vec3(0.49, 0.23, 0.93);
+    vec3 c = vec3(0.02, 0.71, 0.83);
+    vec3 d = vec3(1.0, 1.0, 1.0);
+    if (t < 0.33) return mix(a, b, t / 0.33);
+    if (t < 0.66) return mix(b, c, (t - 0.33) / 0.33);
+    return mix(c, d, (t - 0.66) / 0.34);
+}
+
+vec3 monoColor(float t) {
+    return vec3(t);
+}
+
+vec3 pastelColor(float t) {
+    // pink -> lavender -> mint -> yellow
+    vec3 a = vec3(0.98, 0.71, 0.81);
+    vec3 b = vec3(0.77, 0.71, 0.99);
+    vec3 c = vec3(0.65, 0.95, 0.82);
+    vec3 d = vec3(0.99, 0.94, 0.53);
+    if (t < 0.33) return mix(a, b, t / 0.33);
+    if (t < 0.66) return mix(b, c, (t - 0.33) / 0.33);
+    return mix(c, d, (t - 0.66) / 0.34);
+}
+
+vec3 getColor(float t, int scheme) {
+    if (scheme == 0) return classicColor(t);
+    if (scheme == 1) return fireColor(t);
+    if (scheme == 2) return electricColor(t);
+    if (scheme == 3) return monoColor(t);
+    if (scheme == 4) return pastelColor(t);
+    return classicColor(t);
+}
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    float aspect = u_resolution.x / u_resolution.y;
+
+    // Map to complex plane
+    float scale = 3.0 / u_zoom;
+    float zr = (uv.x - 0.5) * scale * aspect + u_center.x;
+    float zi = (uv.y - 0.5) * scale + u_center.y;
+
+    float cr = u_c.x;
+    float ci = u_c.y;
+
+    int iter = 0;
+    float zr2, zi2;
+
+    for (int i = 0; i < 1000; i++) {
+        if (i >= u_maxIter) break;
+        zr2 = zr * zr;
+        zi2 = zi * zi;
+        if (zr2 + zi2 > 4.0) break;
+        zi = 2.0 * zr * zi + ci;
+        zr = zr2 - zi2 + cr;
+        iter = i + 1;
+    }
+
+    if (iter >= u_maxIter) {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    } else {
+        // Smooth coloring
+        float mag2 = zr * zr + zi * zi;
+        float smoothed = float(iter) - log2(log2(mag2)) + 4.0;
+        float t = smoothed / float(u_maxIter);
+        t = clamp(t * 4.0, 0.0, 1.0); // remap for more visible color range
+        vec3 col = getColor(t, u_colorScheme);
+        gl_FragColor = vec4(col, 1.0);
+    }
+}
+`;
+
+function compileShader(source, type) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader error:', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+    }
+    return shader;
+}
+
+const vertexShader = compileShader(vertexShaderSource, gl.VERTEX_SHADER);
+const fragmentShader = compileShader(fragmentShaderSource, gl.FRAGMENT_SHADER);
+
+const program = gl.createProgram();
+gl.attachShader(program, vertexShader);
+gl.attachShader(program, fragmentShader);
+gl.linkProgram(program);
+
+if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error('Program link error:', gl.getProgramInfoLog(program));
+}
+
+gl.useProgram(program);
+
+// Full-screen quad
+const vertices = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+const buffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+const aPosition = gl.getAttribLocation(program, 'a_position');
+gl.enableVertexAttribArray(aPosition);
+gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+
+// Uniforms
+const uResolution = gl.getUniformLocation(program, 'u_resolution');
+const uC = gl.getUniformLocation(program, 'u_c');
+const uZoom = gl.getUniformLocation(program, 'u_zoom');
+const uCenter = gl.getUniformLocation(program, 'u_center');
+const uMaxIter = gl.getUniformLocation(program, 'u_maxIter');
+const uColorScheme = gl.getUniformLocation(program, 'u_colorScheme');
+
+// ── Resize ──
+function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Render ──
+function render() {
+    gl.uniform2f(uResolution, canvas.width, canvas.height);
+    gl.uniform2f(uC, state.cReal, state.cImag);
+    gl.uniform1f(uZoom, state.zoom);
+    gl.uniform2f(uCenter, state.centerX, state.centerY);
+    gl.uniform1i(uMaxIter, state.maxIter);
+    gl.uniform1i(uColorScheme, state.colorScheme);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+function scheduleRender() {
+    if (animationId) cancelAnimationFrame(animationId);
+    animationId = requestAnimationFrame(() => {
+        render();
+        animationId = null;
+    });
+}
+
+// ── UI Updates ──
+function updateUI() {
+    const rVal = state.cReal;
+    const iVal = state.cImag;
+
+    document.getElementById('real-val').textContent = (rVal < 0 ? '−' : '') + Math.abs(rVal).toFixed(4);
+    document.getElementById('imag-val').textContent = (iVal < 0 ? '−' : '') + Math.abs(iVal).toFixed(4);
+    document.getElementById('iter-val').textContent = state.maxIter;
+    document.getElementById('slider-real').value = rVal;
+    document.getElementById('slider-imag').value = iVal;
+    document.getElementById('slider-iter').value = state.maxIter;
+
+    // Math panel
+    const rSign = rVal < 0 ? '−' : '';
+    const iSign = iVal < 0 ? ' − ' : ' + ';
+    document.getElementById('math-c-display').textContent =
+        `c = ${rSign}${Math.abs(rVal).toFixed(4)}${iSign}${Math.abs(iVal).toFixed(4)}i`;
+    document.getElementById('math-zoom').textContent = `Zoom: ${state.zoom.toFixed(2)}×`;
+    document.getElementById('math-center').textContent =
+        `Center: (${state.centerX.toFixed(4)}, ${state.centerY.toFixed(4)})`;
+
+    // Color swatches
+    document.querySelectorAll('.color-swatch').forEach(s => {
+        s.classList.toggle('active', parseInt(s.dataset.scheme) === state.colorScheme);
+    });
+}
+
+// ── Sliders ──
+document.getElementById('slider-real').addEventListener('input', e => {
+    state.cReal = parseFloat(e.target.value);
+    updateUI();
+    scheduleRender();
+});
+document.getElementById('slider-imag').addEventListener('input', e => {
+    state.cImag = parseFloat(e.target.value);
+    updateUI();
+    scheduleRender();
+});
+document.getElementById('slider-iter').addEventListener('input', e => {
+    state.maxIter = parseInt(e.target.value);
+    updateUI();
+    scheduleRender();
+});
+
+// ── Color Swatches ──
+document.querySelectorAll('.color-swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+        state.colorScheme = parseInt(swatch.dataset.scheme);
+        updateUI();
+        scheduleRender();
+    });
+});
+
+// ── Reset ──
+document.getElementById('reset-btn').addEventListener('click', () => {
+    Object.assign(state, { ...defaults });
+    updateUI();
+    scheduleRender();
+});
+
+// ── Theme Toggle ──
+document.getElementById('theme-toggle').addEventListener('click', () => {
+    const body = document.body;
+    const btn = document.getElementById('theme-toggle');
+    if (body.classList.contains('dark')) {
+        body.classList.remove('dark');
+        body.classList.add('light');
+        btn.textContent = '☀️';
+    } else {
+        body.classList.remove('light');
+        body.classList.add('dark');
+        btn.textContent = '🌙';
+    }
+});
+
+// ── Preset Gallery ──
+const presets = [
+    { name: 'Dendrite',       cReal:  0.0,     cImag:  1.0,     desc: 'Branching tree-like structure' },
+    { name: 'Douady Rabbit',  cReal: -0.1226,  cImag:  0.7449,  desc: 'Three-fold rabbit ears' },
+    { name: 'San Marco',      cReal: -0.7269,  cImag:  0.1889,  desc: 'Interlocking circles' },
+    { name: 'Siegel Disk',    cReal: -0.3905,  cImag: -0.5867,  desc: 'Smooth spiral disk' },
+    { name: 'Airplane',       cReal: -1.7549,  cImag:  0.0,     desc: 'Abstract airplane shape' },
+    { name: 'Lightning',      cReal:  0.285,   cImag:  0.01,    desc: 'Dense lightning bolt fractal' },
+    { name: 'Spiral',         cReal: -0.7269,  cImag: -0.1889,  desc: 'Spiral arms' },
+    { name: 'Dragon',         cReal: -0.8,     cImag:  0.156,   desc: 'Dragon curve-like tendrils' }
+];
+
+const presetList = document.getElementById('preset-list');
+presets.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn';
+    btn.innerHTML = `<div class="preset-name">${p.name}</div><div class="preset-desc">${p.desc}</div>`;
+    btn.addEventListener('click', () => {
+        state.cReal = p.cReal;
+        state.cImag = p.cImag;
+        state.zoom = defaults.zoom;
+        state.centerX = defaults.centerX;
+        state.centerY = defaults.centerY;
+        updateUI();
+        scheduleRender();
+    });
+    presetList.appendChild(btn);
+});
+
+// Preset toggle
+document.getElementById('preset-toggle').addEventListener('click', () => {
+    const list = document.getElementById('preset-list');
+    const arrow = document.querySelector('#preset-toggle .arrow');
+    list.classList.toggle('open');
+    arrow.classList.toggle('open');
+});
+
+// Math panel toggle
+document.getElementById('math-toggle').addEventListener('click', () => {
+    const content = document.getElementById('math-content');
+    const arrow = document.querySelector('#math-toggle .arrow');
+    content.classList.toggle('collapsed');
+    arrow.classList.toggle('open');
+});
+
+// ── Mouse Navigation ──
+
+// Scroll wheel zoom
+canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const mx = (e.clientX - rect.left) / rect.width;
+    const my = 1.0 - (e.clientY - rect.top) / rect.height;
+    const aspect = canvas.width / canvas.height;
+    const scale = 3.0 / state.zoom;
+
+    // Mouse position in complex plane
+    const worldX = (mx - 0.5) * scale * aspect + state.centerX;
+    const worldY = (my - 0.5) * scale + state.centerY;
+
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    state.zoom *= zoomFactor;
+
+    // Recompute so mouse position stays fixed
+    const newScale = 3.0 / state.zoom;
+    state.centerX = worldX - (mx - 0.5) * newScale * aspect;
+    state.centerY = worldY - (my - 0.5) * newScale;
+
+    updateUI();
+    scheduleRender();
+}, { passive: false });
+
+// Drag to pan
+canvas.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragStartCenterX = state.centerX;
+    dragStartCenterY = state.centerY;
+    canvas.style.cursor = 'grabbing';
+});
+
+window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const aspect = canvas.width / canvas.height;
+    const scale = 3.0 / state.zoom;
+    const dx = (e.clientX - dragStartX) / rect.width * scale * aspect;
+    const dy = (e.clientY - dragStartY) / rect.height * scale;
+    state.centerX = dragStartCenterX - dx;
+    state.centerY = dragStartCenterY + dy;
+    updateUI();
+    scheduleRender();
+});
+
+window.addEventListener('mouseup', () => {
+    isDragging = false;
+    canvas.style.cursor = 'crosshair';
+});
+
+// Double-click to zoom
+canvas.addEventListener('dblclick', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) / rect.width;
+    const my = 1.0 - (e.clientY - rect.top) / rect.height;
+    const aspect = canvas.width / canvas.height;
+    const scale = 3.0 / state.zoom;
+
+    const worldX = (mx - 0.5) * scale * aspect + state.centerX;
+    const worldY = (my - 0.5) * scale + state.centerY;
+
+    state.zoom *= 2.0;
+
+    const newScale = 3.0 / state.zoom;
+    state.centerX = worldX - (mx - 0.5) * newScale * aspect;
+    state.centerY = worldY - (my - 0.5) * newScale;
+
+    updateUI();
+    scheduleRender();
+});
+
+// ── Touch Navigation ──
+let touches = [];
+let lastTouchDist = 0;
+let lastTouchCenter = { x: 0, y: 0 };
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    touches = [...e.touches];
+    if (touches.length === 1) {
+        isDragging = true;
+        dragStartX = touches[0].clientX;
+        dragStartY = touches[0].clientY;
+        dragStartCenterX = state.centerX;
+        dragStartCenterY = state.centerY;
+    } else if (touches.length === 2) {
+        isDragging = false;
+        const dx = touches[1].clientX - touches[0].clientX;
+        const dy = touches[1].clientY - touches[0].clientY;
+        lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+        lastTouchCenter = {
+            x: (touches[0].clientX + touches[1].clientX) / 2,
+            y: (touches[0].clientY + touches[1].clientY) / 2
+        };
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const curTouches = [...e.touches];
+    if (curTouches.length === 1 && isDragging) {
+        const rect = canvas.getBoundingClientRect();
+        const aspect = canvas.width / canvas.height;
+        const scale = 3.0 / state.zoom;
+        const dx = (curTouches[0].clientX - dragStartX) / rect.width * scale * aspect;
+        const dy = (curTouches[0].clientY - dragStartY) / rect.height * scale;
+        state.centerX = dragStartCenterX - dx;
+        state.centerY = dragStartCenterY + dy;
+        updateUI();
+        scheduleRender();
+    } else if (curTouches.length === 2) {
+        const dx = curTouches[1].clientX - curTouches[0].clientX;
+        const dy = curTouches[1].clientY - curTouches[0].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (lastTouchDist > 0) {
+            const zoomFactor = dist / lastTouchDist;
+            state.zoom *= zoomFactor;
+            updateUI();
+            scheduleRender();
+        }
+        lastTouchDist = dist;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    touches = [...e.touches];
+    if (touches.length < 2) lastTouchDist = 0;
+    if (touches.length === 0) isDragging = false;
+}, { passive: false });
+
+// ── Initial Render ──
+updateUI();
+render();
+</script>
+</body>
+</html>
