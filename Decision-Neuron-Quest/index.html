@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decision Neuron Quest</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #f5f5f5;
+    color: #1f2937;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+}
+
+/* ── Header ── */
+header {
+    background: #fff;
+    border-bottom: 2px solid #e5e7eb;
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+header h1 { font-size: 1.4rem; }
+#header-prediction {
+    font-weight: 700;
+    font-size: 1.1rem;
+    padding: 6px 16px;
+    border-radius: 20px;
+    transition: background 0.3s, color 0.3s;
+}
+#header-prediction.eat { background: #d1fae5; color: #065f46; }
+#header-prediction.dont { background: #fee2e2; color: #991b1b; }
+
+/* ── Main Layout ── */
+.main-grid {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 16px;
+    padding: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* ── Panels ── */
+.panel {
+    background: #fff;
+    border-radius: 12px;
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.panel h2 {
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #6b7280;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Input Controls ── */
+#input-panel { grid-column: 1; grid-row: 1; }
+
+.slider-group {
+    margin-bottom: 14px;
+}
+.slider-group label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.slider-group label .val {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    color: #3b82f6;
+    min-width: 50px;
+    text-align: right;
+}
+.slider-group .desc {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #e5e7eb;
+    outline: none;
+    cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #3b82f6;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #3b82f6;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    cursor: pointer;
+}
+
+/* Decision toggle */
+.decision-toggle {
+    display: flex;
+    gap: 8px;
+    margin: 14px 0;
+}
+.decision-toggle button {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+.decision-toggle button.active-eat { background: #d1fae5; border-color: #10b981; color: #065f46; }
+.decision-toggle button.active-dont { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+
+/* Action buttons */
+.action-btns {
+    display: flex;
+    gap: 8px;
+}
+.btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: background 0.2s, transform 0.1s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: #3b82f6; color: #fff; flex: 1; }
+.btn-primary:hover { background: #2563eb; }
+.btn-danger { background: #fee2e2; color: #ef4444; }
+.btn-danger:hover { background: #fecaca; }
+.btn-secondary { background: #e5e7eb; color: #374151; }
+.btn-secondary:hover { background: #d1d5db; }
+.btn-success { background: #10b981; color: #fff; }
+.btn-success:hover { background: #059669; }
+.btn-warning { background: #f59e0b; color: #fff; }
+.btn-warning:hover { background: #d97706; }
+
+/* ── Network Visualization ── */
+#viz-panel { grid-column: 2; grid-row: 1 / 3; min-height: 420px; position: relative; overflow: hidden; }
+#network-svg { width: 100%; height: 100%; min-height: 400px; }
+
+.neuron-circle {
+    transition: fill 0.4s, stroke 0.4s;
+    cursor: pointer;
+}
+.neuron-label {
+    font-size: 11px;
+    font-weight: 600;
+    fill: #374151;
+    pointer-events: none;
+    text-anchor: middle;
+}
+.neuron-value {
+    font-size: 10px;
+    font-family: 'Courier New', monospace;
+    fill: #6b7280;
+    pointer-events: none;
+    text-anchor: middle;
+}
+.weight-line {
+    transition: stroke 0.4s, stroke-width 0.4s, opacity 0.4s;
+    cursor: pointer;
+}
+.weight-line:hover { opacity: 1 !important; }
+
+/* Tooltip */
+.tooltip {
+    position: absolute;
+    background: #1f2937;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 30;
+    white-space: nowrap;
+}
+.tooltip.visible { opacity: 1; }
+
+/* Pulse animation */
+@keyframes neuronPulse {
+    0% { r: 22; }
+    50% { r: 28; }
+    100% { r: 22; }
+}
+.neuron-pulse {
+    animation: neuronPulse 0.6s ease-in-out;
+}
+
+/* ── Training Controls ── */
+#training-panel { grid-column: 1; grid-row: 2; }
+
+.training-btns {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.training-btns .btn { flex: 1; min-width: 70px; text-align: center; }
+.step-progress {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 10px;
+    font-family: 'Courier New', monospace;
+}
+
+/* ── Metrics Panel ── */
+#metrics-panel { grid-column: 2; grid-row: 3; }
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.metric-card {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    border: 1px solid #e5e7eb;
+}
+.metric-card .metric-label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+.metric-card .metric-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    font-family: 'Courier New', monospace;
+    transition: color 0.3s;
+}
+.prediction-display {
+    font-size: 1.3rem;
+    font-weight: 800;
+    text-align: center;
+    padding: 10px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    transition: background 0.3s, color 0.3s;
+}
+.prediction-display.eat { background: #d1fae5; color: #065f46; }
+.prediction-display.dont { background: #fee2e2; color: #991b1b; }
+
+/* Loss graph */
+#loss-graph-container {
+    position: relative;
+    height: 160px;
+    background: #f9fafb;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+}
+#loss-canvas {
+    width: 100%;
+    height: 100%;
+}
+
+/* ── Training Examples ── */
+#examples-panel { grid-column: 1 / 3; grid-row: 4; }
+
+.examples-list {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 4px 0 8px;
+}
+.example-card {
+    min-width: 200px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px;
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    position: relative;
+    transition: border-color 0.2s, opacity 0.3s;
+}
+.example-card.disabled { opacity: 0.45; }
+.example-card.user-created { border-left: 3px solid #3b82f6; }
+.example-card .ex-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.example-card .ex-label {
+    font-weight: 700;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+.example-card .ex-label.eat { background: #d1fae5; color: #065f46; }
+.example-card .ex-label.dont { background: #fee2e2; color: #991b1b; }
+.example-card .ex-values { color: #6b7280; line-height: 1.6; }
+.example-card .ex-values span { font-family: 'Courier New', monospace; color: #374151; }
+.example-card .ex-prediction {
+    margin-top: 6px;
+    font-weight: 700;
+}
+.example-card .ex-prediction.correct { color: #10b981; }
+.example-card .ex-prediction.wrong { color: #ef4444; }
+.example-card .ex-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+}
+.ex-btn {
+    padding: 3px 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.7rem;
+    transition: background 0.2s;
+}
+.ex-btn:hover { background: #f3f4f6; }
+.ex-btn.delete { color: #ef4444; border-color: #fecaca; }
+.ex-btn.delete:hover { background: #fee2e2; }
+
+/* ── What's Happening ── */
+#whats-happening {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: #1e40af;
+    line-height: 1.5;
+    display: none;
+}
+#whats-happening.visible { display: block; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .main-grid {
+        grid-template-columns: 1fr;
+    }
+    #input-panel { grid-column: 1; grid-row: 1; }
+    #viz-panel { grid-column: 1; grid-row: 2; min-height: 320px; }
+    #training-panel { grid-column: 1; grid-row: 3; }
+    #metrics-panel { grid-column: 1; grid-row: 4; }
+    #examples-panel { grid-column: 1; grid-row: 5; }
+    .metrics-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 500px) {
+    header h1 { font-size: 1.1rem; }
+    .metrics-grid { grid-template-columns: 1fr; }
+    .example-card { min-width: 170px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+    <h1>Decision Neuron Quest 🍪</h1>
+    <div id="header-prediction" class="eat">EAT COOKIE 🍪</div>
+</header>
+
+<div class="main-grid">
+
+    <!-- Input Controls -->
+    <div id="input-panel" class="panel">
+        <h2>🎛️ Cookie Parameters</h2>
+
+        <div class="slider-group">
+            <label>Calories <span class="val" id="cal-val">300</span></label>
+            <input type="range" id="slider-cal" min="0" max="1000" step="10" value="300" aria-label="Calories">
+        </div>
+        <div class="slider-group">
+            <label>Price <span class="val" id="price-val">$3.00</span></label>
+            <input type="range" id="slider-price" min="0" max="10" step="0.25" value="3" aria-label="Price">
+        </div>
+        <div class="slider-group">
+            <label>Review Score <span class="val" id="review-val">3.5 ★</span></label>
+            <input type="range" id="slider-review" min="0" max="5" step="0.1" value="3.5" aria-label="Review Score">
+        </div>
+        <div class="slider-group">
+            <label>Activity Level <span class="val" id="activity-val">50%</span></label>
+            <input type="range" id="slider-activity" min="0" max="100" step="1" value="50" aria-label="Activity Level">
+            <div class="desc" id="activity-desc">Moderate activity</div>
+        </div>
+
+        <h2 style="margin-top:14px">🏷️ Decision Label</h2>
+        <div class="decision-toggle">
+            <button id="btn-eat" class="active-eat" aria-label="Should eat cookie">🍪 Eat</button>
+            <button id="btn-dont" aria-label="Should not eat cookie">🚫 Don't</button>
+        </div>
+
+        <div class="action-btns">
+            <button class="btn btn-primary" id="btn-add-example">+ Add Example</button>
+            <button class="btn btn-danger" id="btn-clear-examples">Clear</button>
+        </div>
+    </div>
+
+    <!-- Network Visualization -->
+    <div id="viz-panel" class="panel">
+        <h2>🧠 Neural Network</h2>
+        <svg id="network-svg" viewBox="0 0 700 400" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <!-- Training Controls -->
+    <div id="training-panel" class="panel">
+        <h2>⚡ Training</h2>
+        <div class="training-btns">
+            <button class="btn btn-secondary" id="btn-step">Step</button>
+            <button class="btn btn-success" id="btn-train">Train</button>
+            <button class="btn btn-danger" id="btn-reset">Reset</button>
+        </div>
+        <div class="step-progress" id="step-progress">Step 0</div>
+
+        <div class="slider-group">
+            <label>Learning Rate <span class="val" id="lr-val">0.100</span></label>
+            <input type="range" id="slider-lr" min="0.001" max="0.5" step="0.001" value="0.1" aria-label="Learning rate">
+        </div>
+        <div class="slider-group">
+            <label>Training Steps <span class="val" id="steps-val">100</span></label>
+            <input type="range" id="slider-steps" min="1" max="1000" step="1" value="100" aria-label="Training steps">
+        </div>
+        <div class="slider-group">
+            <label>Speed <span class="val" id="speed-val">5/sec</span></label>
+            <input type="range" id="slider-speed" min="1" max="20" step="1" value="5" aria-label="Training speed">
+        </div>
+
+        <div id="whats-happening"></div>
+    </div>
+
+    <!-- Metrics -->
+    <div id="metrics-panel" class="panel">
+        <h2>📊 Metrics & Feedback</h2>
+
+        <div id="current-prediction" class="prediction-display eat">
+            EAT COOKIE 🍪 — Confidence: 50.0%
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Loss</div>
+                <div class="metric-value" id="metric-loss" style="color:#ef4444">0.250</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Accuracy</div>
+                <div class="metric-value" id="metric-accuracy" style="color:#6b7280">0%</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Steps</div>
+                <div class="metric-value" id="metric-steps">0</div>
+            </div>
+        </div>
+
+        <div id="loss-graph-container">
+            <canvas id="loss-canvas"></canvas>
+        </div>
+    </div>
+
+    <!-- Training Examples -->
+    <div id="examples-panel" class="panel">
+        <h2>📋 Training Examples</h2>
+        <div class="examples-list" id="examples-list"></div>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  NEURAL NETWORK
+// ══════════════════════════════════════════
+class NeuralNetwork {
+    constructor() {
+        this.learningRate = 0.1;
+        this.reset();
+    }
+
+    reset() {
+        // Xavier initialization
+        const xavierIH = Math.sqrt(2 / (4 + 3));
+        const xavierHO = Math.sqrt(2 / (3 + 1));
+
+        this.weightsIH = this.randomMatrix(4, 3, xavierIH);
+        this.weightsHO = this.randomMatrix(3, 1, xavierHO);
+        this.biasH = [0, 0, 0];
+        this.biasO = [0];
+
+        // Cache for visualization
+        this.lastInputs = [0, 0, 0, 0];
+        this.lastHidden = [0, 0, 0];
+        this.lastOutput = [0.5];
+    }
+
+    randomMatrix(rows, cols, scale) {
+        if (cols === 1) {
+            return Array.from({ length: rows }, () => (Math.random() * 2 - 1) * scale);
+        }
+        return Array.from({ length: rows }, () =>
+            Array.from({ length: cols }, () => (Math.random() * 2 - 1) * scale)
+        );
+    }
+
+    sigmoid(x) {
+        return 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, x))));
+    }
+
+    sigmoidDeriv(x) {
+        return x * (1 - x);
+    }
+
+    predict(inputs) {
+        this.lastInputs = [...inputs];
+
+        // Input → Hidden
+        this.lastHidden = [];
+        for (let j = 0; j < 3; j++) {
+            let sum = this.biasH[j];
+            for (let i = 0; i < 4; i++) {
+                sum += inputs[i] * this.weightsIH[i][j];
+            }
+            this.lastHidden.push(this.sigmoid(sum));
+        }
+
+        // Hidden → Output
+        let sum = this.biasO[0];
+        for (let j = 0; j < 3; j++) {
+            sum += this.lastHidden[j] * this.weightsHO[j];
+        }
+        this.lastOutput = [this.sigmoid(sum)];
+        return this.lastOutput[0];
+    }
+
+    train(inputs, target) {
+        const output = this.predict(inputs);
+
+        // Output error
+        const outputError = target - output;
+        const outputDelta = outputError * this.sigmoidDeriv(output);
+
+        // Hidden errors
+        const hiddenDeltas = [];
+        for (let j = 0; j < 3; j++) {
+            const error = outputDelta * this.weightsHO[j];
+            hiddenDeltas.push(error * this.sigmoidDeriv(this.lastHidden[j]));
+        }
+
+        // Update hidden → output weights
+        for (let j = 0; j < 3; j++) {
+            this.weightsHO[j] += this.learningRate * outputDelta * this.lastHidden[j];
+        }
+        this.biasO[0] += this.learningRate * outputDelta;
+
+        // Update input → hidden weights
+        for (let i = 0; i < 4; i++) {
+            for (let j = 0; j < 3; j++) {
+                this.weightsIH[i][j] += this.learningRate * hiddenDeltas[j] * inputs[i];
+            }
+        }
+        for (let j = 0; j < 3; j++) {
+            this.biasH[j] += this.learningRate * hiddenDeltas[j];
+        }
+
+        const loss = outputError * outputError;
+        return { output, loss };
+    }
+}
+
+// ══════════════════════════════════════════
+//  APP STATE
+// ══════════════════════════════════════════
+const nn = new NeuralNetwork();
+let totalSteps = 0;
+let isTraining = false;
+let trainInterval = null;
+let trainTargetSteps = 0;
+let trainCurrentStep = 0;
+let decisionLabel = 1; // 1 = eat, 0 = don't
+let lossHistory = [];
+let accuracyHistory = [];
+
+// Pre-loaded training examples
+const preloadedExamples = [
+    { cal: 800, price: 8, review: 2.0, activity: 10, target: 0, preloaded: true, enabled: true },
+    { cal: 150, price: 1, review: 4.5, activity: 80, target: 1, preloaded: true, enabled: true },
+    { cal: 400, price: 4, review: 3.0, activity: 50, target: 0, preloaded: true, enabled: true },
+    { cal: 200, price: 7, review: 5.0, activity: 95, target: 1, preloaded: true, enabled: true },
+    { cal: 900, price: 2, review: 3.5, activity: 5,  target: 0, preloaded: true, enabled: true },
+    { cal: 350, price: 1.5, review: 4.8, activity: 30, target: 1, preloaded: true, enabled: true },
+    { cal: 1000, price: 5, review: 1.5, activity: 60, target: 0, preloaded: true, enabled: true },
+    { cal: 180, price: 3.5, review: 4.2, activity: 90, target: 1, preloaded: true, enabled: true },
+];
+
+let trainingExamples = [...preloadedExamples];
+
+function normalizeInputs(ex) {
+    return [ex.cal / 1000, ex.price / 10, ex.review / 5, ex.activity / 100];
+}
+
+function getCurrentInputs() {
+    return {
+        cal: parseFloat(document.getElementById('slider-cal').value),
+        price: parseFloat(document.getElementById('slider-price').value),
+        review: parseFloat(document.getElementById('slider-review').value),
+        activity: parseFloat(document.getElementById('slider-activity').value),
+    };
+}
+
+// ══════════════════════════════════════════
+//  SVG NETWORK VISUALIZATION
+// ══════════════════════════════════════════
+const svg = document.getElementById('network-svg');
+const tooltip = document.getElementById('tooltip');
+
+const layers = {
+    input:  { x: 100, neurons: ['Calories', 'Price', 'Review', 'Activity'], ys: [60, 140, 220, 300] },
+    bias:   { x: 100, neurons: ['Bias'], ys: [370] },
+    hidden: { x: 350, neurons: ['H1', 'H2', 'H3'], ys: [100, 200, 300] },
+    output: { x: 600, neurons: ['Decision'], ys: [200] },
+};
+
+let weightLines = {};
+let biasLines = {};
+let neuronCircles = {};
+let neuronValues = {};
+
+function buildNetwork() {
+    svg.innerHTML = '';
+
+    // Draw weight lines: input → hidden
+    for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 3; j++) {
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', layers.input.x);
+            line.setAttribute('y1', layers.input.ys[i]);
+            line.setAttribute('x2', layers.hidden.x);
+            line.setAttribute('y2', layers.hidden.ys[j]);
+            line.setAttribute('class', 'weight-line');
+            line.dataset.type = 'ih';
+            line.dataset.i = i;
+            line.dataset.j = j;
+            svg.appendChild(line);
+            weightLines[`ih_${i}_${j}`] = line;
+        }
+    }
+
+    // Draw weight lines: hidden → output
+    for (let j = 0; j < 3; j++) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', layers.hidden.x);
+        line.setAttribute('y1', layers.hidden.ys[j]);
+        line.setAttribute('x2', layers.output.x);
+        line.setAttribute('y2', layers.output.ys[0]);
+        line.setAttribute('class', 'weight-line');
+        line.dataset.type = 'ho';
+        line.dataset.j = j;
+        svg.appendChild(line);
+        weightLines[`ho_${j}`] = line;
+    }
+
+    // Bias lines (dashed) → hidden
+    for (let j = 0; j < 3; j++) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', layers.bias.x);
+        line.setAttribute('y1', layers.bias.ys[0]);
+        line.setAttribute('x2', layers.hidden.x);
+        line.setAttribute('y2', layers.hidden.ys[j]);
+        line.setAttribute('class', 'weight-line');
+        line.setAttribute('stroke-dasharray', '4 3');
+        line.dataset.type = 'bh';
+        line.dataset.j = j;
+        svg.appendChild(line);
+        biasLines[`bh_${j}`] = line;
+    }
+
+    // Bias line → output
+    const bLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    bLine.setAttribute('x1', layers.bias.x);
+    bLine.setAttribute('y1', layers.bias.ys[0]);
+    bLine.setAttribute('x2', layers.output.x);
+    bLine.setAttribute('y2', layers.output.ys[0]);
+    bLine.setAttribute('class', 'weight-line');
+    bLine.setAttribute('stroke-dasharray', '4 3');
+    bLine.dataset.type = 'bo';
+    svg.appendChild(bLine);
+    biasLines['bo'] = bLine;
+
+    // Draw neurons
+    function addNeuron(x, y, label, key) {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', x);
+        circle.setAttribute('cy', y);
+        circle.setAttribute('r', 22);
+        circle.setAttribute('fill', '#e5e7eb');
+        circle.setAttribute('stroke', '#9ca3af');
+        circle.setAttribute('stroke-width', 2);
+        circle.setAttribute('class', 'neuron-circle');
+        g.appendChild(circle);
+        neuronCircles[key] = circle;
+
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', x);
+        text.setAttribute('y', y - 30);
+        text.setAttribute('class', 'neuron-label');
+        text.textContent = label;
+        g.appendChild(text);
+
+        const val = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        val.setAttribute('x', x);
+        val.setAttribute('y', y + 5);
+        val.setAttribute('class', 'neuron-value');
+        val.textContent = '0.00';
+        g.appendChild(val);
+        neuronValues[key] = val;
+
+        svg.appendChild(g);
+    }
+
+    // Input neurons
+    layers.input.neurons.forEach((name, i) => addNeuron(layers.input.x, layers.input.ys[i], name, `in_${i}`));
+    // Bias
+    addNeuron(layers.bias.x, layers.bias.ys[0], 'Bias', 'bias');
+    // Hidden
+    layers.hidden.neurons.forEach((name, j) => addNeuron(layers.hidden.x, layers.hidden.ys[j], name, `h_${j}`));
+    // Output
+    addNeuron(layers.output.x, layers.output.ys[0], 'Decision', 'out');
+
+    // Output threshold label
+    const thresh = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    thresh.setAttribute('x', layers.output.x);
+    thresh.setAttribute('y', layers.output.ys[0] + 42);
+    thresh.setAttribute('class', 'neuron-label');
+    thresh.setAttribute('font-size', '9');
+    thresh.setAttribute('fill', '#9ca3af');
+    thresh.textContent = '>0.5 = Eat Cookie';
+    svg.appendChild(thresh);
+
+    // Tooltip on hover
+    svg.querySelectorAll('.weight-line').forEach(line => {
+        line.addEventListener('mouseenter', e => {
+            const type = line.dataset.type;
+            let val = 0;
+            if (type === 'ih') val = nn.weightsIH[line.dataset.i][line.dataset.j];
+            else if (type === 'ho') val = nn.weightsHO[line.dataset.j];
+            else if (type === 'bh') val = nn.biasH[line.dataset.j];
+            else if (type === 'bo') val = nn.biasO[0];
+            showTooltip(e, `Weight: ${val.toFixed(4)}`);
+        });
+        line.addEventListener('mouseleave', hideTooltip);
+    });
+
+    svg.querySelectorAll('.neuron-circle').forEach(circle => {
+        circle.addEventListener('mouseenter', e => {
+            const key = Object.keys(neuronCircles).find(k => neuronCircles[k] === circle);
+            let val = '';
+            if (key.startsWith('in_')) val = `Input: ${nn.lastInputs[parseInt(key.split('_')[1])].toFixed(3)}`;
+            else if (key.startsWith('h_')) val = `Activation: ${nn.lastHidden[parseInt(key.split('_')[1])].toFixed(4)}`;
+            else if (key === 'out') val = `Output: ${nn.lastOutput[0].toFixed(4)}`;
+            else if (key === 'bias') val = 'Bias = 1.0';
+            showTooltip(e, val);
+        });
+        circle.addEventListener('mouseleave', hideTooltip);
+    });
+}
+
+function showTooltip(e, text) {
+    const rect = document.getElementById('viz-panel').getBoundingClientRect();
+    tooltip.textContent = text;
+    tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+    tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
+    tooltip.classList.add('visible');
+}
+function hideTooltip() { tooltip.classList.remove('visible'); }
+
+function updateVisualization() {
+    // Update weight lines
+    for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 3; j++) {
+            const w = nn.weightsIH[i][j];
+            const line = weightLines[`ih_${i}_${j}`];
+            const absW = Math.min(Math.abs(w), 3);
+            line.setAttribute('stroke', w >= 0 ? `rgba(59,130,246,${0.3 + absW * 0.23})` : `rgba(239,68,68,${0.3 + absW * 0.23})`);
+            line.setAttribute('stroke-width', 1 + absW * 1.5);
+        }
+    }
+    for (let j = 0; j < 3; j++) {
+        const w = nn.weightsHO[j];
+        const line = weightLines[`ho_${j}`];
+        const absW = Math.min(Math.abs(w), 3);
+        line.setAttribute('stroke', w >= 0 ? `rgba(59,130,246,${0.3 + absW * 0.23})` : `rgba(239,68,68,${0.3 + absW * 0.23})`);
+        line.setAttribute('stroke-width', 1 + absW * 1.5);
+    }
+
+    // Bias lines
+    for (let j = 0; j < 3; j++) {
+        const w = nn.biasH[j];
+        const line = biasLines[`bh_${j}`];
+        const absW = Math.min(Math.abs(w), 3);
+        line.setAttribute('stroke', w >= 0 ? `rgba(59,130,246,${0.2 + absW * 0.15})` : `rgba(239,68,68,${0.2 + absW * 0.15})`);
+        line.setAttribute('stroke-width', 1 + absW);
+    }
+    {
+        const w = nn.biasO[0];
+        const line = biasLines['bo'];
+        const absW = Math.min(Math.abs(w), 3);
+        line.setAttribute('stroke', w >= 0 ? `rgba(59,130,246,${0.2 + absW * 0.15})` : `rgba(239,68,68,${0.2 + absW * 0.15})`);
+        line.setAttribute('stroke-width', 1 + absW);
+    }
+
+    // Input neuron values & fills
+    for (let i = 0; i < 4; i++) {
+        const v = nn.lastInputs[i];
+        neuronValues[`in_${i}`].textContent = v.toFixed(2);
+        const brightness = Math.round(220 - v * 140);
+        neuronCircles[`in_${i}`].setAttribute('fill', `rgb(${brightness}, ${brightness + 10}, 255)`);
+    }
+    neuronValues['bias'].textContent = '1.00';
+    neuronCircles['bias'].setAttribute('fill', '#c4b5fd');
+
+    // Hidden neuron values & fills
+    for (let j = 0; j < 3; j++) {
+        const v = nn.lastHidden[j];
+        neuronValues[`h_${j}`].textContent = v.toFixed(2);
+        const g = Math.round(120 + v * 135);
+        neuronCircles[`h_${j}`].setAttribute('fill', `rgb(${100 - v * 50}, ${g}, ${150 - v * 50})`);
+    }
+
+    // Output neuron
+    const out = nn.lastOutput[0];
+    neuronValues['out'].textContent = out.toFixed(2);
+    if (out >= 0.5) {
+        neuronCircles['out'].setAttribute('fill', `rgba(16,185,129,${0.3 + out * 0.7})`);
+        neuronCircles['out'].setAttribute('stroke', '#10b981');
+    } else {
+        neuronCircles['out'].setAttribute('fill', `rgba(239,68,68,${0.3 + (1 - out) * 0.7})`);
+        neuronCircles['out'].setAttribute('stroke', '#ef4444');
+    }
+}
+
+function pulseNeurons() {
+    Object.values(neuronCircles).forEach(c => {
+        c.classList.remove('neuron-pulse');
+        void c.offsetWidth; // reflow
+        c.classList.add('neuron-pulse');
+    });
+}
+
+// ══════════════════════════════════════════
+//  UI UPDATES
+// ══════════════════════════════════════════
+function getActivityDesc(val) {
+    if (val <= 10) return 'Completely sedentary all day';
+    if (val <= 30) return 'Light activity';
+    if (val <= 60) return 'Moderate activity';
+    if (val <= 85) return 'Good workout';
+    return 'Intense workout completed';
+}
+
+function updateSliderDisplays() {
+    const cal = document.getElementById('slider-cal').value;
+    const price = parseFloat(document.getElementById('slider-price').value);
+    const review = parseFloat(document.getElementById('slider-review').value);
+    const activity = document.getElementById('slider-activity').value;
+
+    document.getElementById('cal-val').textContent = cal;
+    document.getElementById('price-val').textContent = '$' + price.toFixed(2);
+    document.getElementById('review-val').textContent = review.toFixed(1) + ' ★';
+    document.getElementById('activity-val').textContent = activity + '%';
+    document.getElementById('activity-desc').textContent = getActivityDesc(parseInt(activity));
+}
+
+function updatePrediction() {
+    const inp = getCurrentInputs();
+    const normalized = normalizeInputs(inp);
+    const pred = nn.predict(normalized);
+    const eat = pred >= 0.5;
+    const confidence = eat ? pred * 100 : (1 - pred) * 100;
+
+    const predDiv = document.getElementById('current-prediction');
+    const headerPred = document.getElementById('header-prediction');
+
+    if (eat) {
+        predDiv.className = 'prediction-display eat';
+        predDiv.textContent = `EAT COOKIE 🍪 — Confidence: ${confidence.toFixed(1)}%`;
+        headerPred.className = 'eat';
+        headerPred.textContent = `EAT 🍪 ${confidence.toFixed(0)}%`;
+    } else {
+        predDiv.className = 'prediction-display dont';
+        predDiv.textContent = `DON'T EAT 🚫 — Confidence: ${confidence.toFixed(1)}%`;
+        headerPred.className = 'dont';
+        headerPred.textContent = `DON'T 🚫 ${confidence.toFixed(0)}%`;
+    }
+
+    updateVisualization();
+}
+
+function computeAccuracy() {
+    const enabled = trainingExamples.filter(e => e.enabled);
+    if (enabled.length === 0) return 0;
+    let correct = 0;
+    enabled.forEach(ex => {
+        const pred = nn.predict(normalizeInputs(ex));
+        const predicted = pred >= 0.5 ? 1 : 0;
+        if (predicted === ex.target) correct++;
+    });
+    return correct / enabled.length;
+}
+
+function updateMetrics(loss) {
+    const acc = computeAccuracy();
+    const lossEl = document.getElementById('metric-loss');
+    const accEl = document.getElementById('metric-accuracy');
+
+    if (loss !== undefined) {
+        lossEl.textContent = loss.toFixed(4);
+        if (loss > 0.15) lossEl.style.color = '#ef4444';
+        else if (loss > 0.05) lossEl.style.color = '#f59e0b';
+        else lossEl.style.color = '#10b981';
+    }
+
+    accEl.textContent = (acc * 100).toFixed(0) + '%';
+    if (acc > 0.8) accEl.style.color = '#10b981';
+    else if (acc > 0.5) accEl.style.color = '#f59e0b';
+    else accEl.style.color = '#ef4444';
+
+    document.getElementById('metric-steps').textContent = totalSteps;
+}
+
+// ══════════════════════════════════════════
+//  LOSS GRAPH
+// ══════════════════════════════════════════
+const lossCanvas = document.getElementById('loss-canvas');
+const lossCtx = lossCanvas.getContext('2d');
+
+function resizeLossCanvas() {
+    const container = document.getElementById('loss-graph-container');
+    const dpr = window.devicePixelRatio || 1;
+    lossCanvas.width = container.clientWidth * dpr;
+    lossCanvas.height = container.clientHeight * dpr;
+    lossCtx.scale(dpr, dpr);
+    drawLossGraph();
+}
+
+function drawLossGraph() {
+    const w = lossCanvas.width / (window.devicePixelRatio || 1);
+    const h = lossCanvas.height / (window.devicePixelRatio || 1);
+    lossCtx.clearRect(0, 0, w, h);
+
+    if (lossHistory.length < 2) {
+        lossCtx.fillStyle = '#9ca3af';
+        lossCtx.font = '12px sans-serif';
+        lossCtx.textAlign = 'center';
+        lossCtx.fillText('Train to see loss graph', w / 2, h / 2);
+        return;
+    }
+
+    const pad = { top: 10, right: 10, bottom: 20, left: 40 };
+    const gw = w - pad.left - pad.right;
+    const gh = h - pad.top - pad.bottom;
+
+    // Sample if too many points
+    let data = lossHistory;
+    if (data.length > 500) {
+        const step = Math.ceil(data.length / 500);
+        data = data.filter((_, i) => i % step === 0);
+    }
+
+    const maxLoss = Math.max(...data, 0.01);
+
+    // Axes
+    lossCtx.strokeStyle = '#e5e7eb';
+    lossCtx.lineWidth = 1;
+    lossCtx.beginPath();
+    lossCtx.moveTo(pad.left, pad.top);
+    lossCtx.lineTo(pad.left, pad.top + gh);
+    lossCtx.lineTo(pad.left + gw, pad.top + gh);
+    lossCtx.stroke();
+
+    // Axis labels
+    lossCtx.fillStyle = '#9ca3af';
+    lossCtx.font = '9px monospace';
+    lossCtx.textAlign = 'right';
+    lossCtx.fillText(maxLoss.toFixed(2), pad.left - 4, pad.top + 10);
+    lossCtx.fillText('0', pad.left - 4, pad.top + gh);
+    lossCtx.textAlign = 'center';
+    lossCtx.fillText('Steps', pad.left + gw / 2, h - 2);
+
+    // Loss line
+    lossCtx.strokeStyle = '#ef4444';
+    lossCtx.lineWidth = 1.5;
+    lossCtx.beginPath();
+    data.forEach((val, i) => {
+        const x = pad.left + (i / (data.length - 1)) * gw;
+        const y = pad.top + gh - (val / maxLoss) * gh;
+        if (i === 0) lossCtx.moveTo(x, y);
+        else lossCtx.lineTo(x, y);
+    });
+    lossCtx.stroke();
+
+    // Accuracy line
+    if (accuracyHistory.length > 1) {
+        let accData = accuracyHistory;
+        if (accData.length > 500) {
+            const step = Math.ceil(accData.length / 500);
+            accData = accData.filter((_, i) => i % step === 0);
+        }
+        lossCtx.strokeStyle = '#10b981';
+        lossCtx.lineWidth = 1.5;
+        lossCtx.setLineDash([4, 3]);
+        lossCtx.beginPath();
+        accData.forEach((val, i) => {
+            const x = pad.left + (i / (accData.length - 1)) * gw;
+            const y = pad.top + gh - val * gh;
+            if (i === 0) lossCtx.moveTo(x, y);
+            else lossCtx.lineTo(x, y);
+        });
+        lossCtx.stroke();
+        lossCtx.setLineDash([]);
+    }
+
+    // Legend
+    lossCtx.font = '9px sans-serif';
+    lossCtx.textAlign = 'left';
+    lossCtx.fillStyle = '#ef4444';
+    lossCtx.fillText('— Loss', pad.left + 4, pad.top + 12);
+    lossCtx.fillStyle = '#10b981';
+    lossCtx.fillText('--- Accuracy', pad.left + 50, pad.top + 12);
+}
+
+window.addEventListener('resize', resizeLossCanvas);
+
+// ══════════════════════════════════════════
+//  TRAINING EXAMPLES LIST
+// ══════════════════════════════════════════
+function renderExamples() {
+    const list = document.getElementById('examples-list');
+    list.innerHTML = '';
+
+    trainingExamples.forEach((ex, idx) => {
+        const card = document.createElement('div');
+        card.className = 'example-card' + (ex.enabled ? '' : ' disabled') + (!ex.preloaded ? ' user-created' : '');
+
+        const pred = nn.predict(normalizeInputs(ex));
+        const predicted = pred >= 0.5 ? 1 : 0;
+        const correct = predicted === ex.target;
+
+        card.innerHTML = `
+            <div class="ex-header">
+                <span class="ex-label ${ex.target === 1 ? 'eat' : 'dont'}">${ex.target === 1 ? '🍪 Eat' : '🚫 Don\'t'}</span>
+                <span class="ex-prediction ${correct ? 'correct' : 'wrong'}">${correct ? '✓' : '✗'}</span>
+            </div>
+            <div class="ex-values">
+                Cal: <span>${ex.cal}</span><br>
+                Price: <span>$${ex.price.toFixed(2)}</span><br>
+                Review: <span>${ex.review.toFixed(1)}★</span><br>
+                Activity: <span>${ex.activity}%</span>
+            </div>
+            <div class="ex-actions">
+                <button class="ex-btn" data-idx="${idx}" data-action="toggle">${ex.enabled ? 'Disable' : 'Enable'}</button>
+                ${!ex.preloaded ? `<button class="ex-btn delete" data-idx="${idx}" data-action="delete">Delete</button>` : ''}
+            </div>
+        `;
+        list.appendChild(card);
+    });
+
+    // Event delegation
+    list.querySelectorAll('.ex-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.idx);
+            if (btn.dataset.action === 'toggle') {
+                trainingExamples[idx].enabled = !trainingExamples[idx].enabled;
+            } else if (btn.dataset.action === 'delete') {
+                trainingExamples.splice(idx, 1);
+            }
+            renderExamples();
+        });
+    });
+}
+
+// ══════════════════════════════════════════
+//  TRAINING STEP
+// ══════════════════════════════════════════
+function doStep() {
+    const enabled = trainingExamples.filter(e => e.enabled);
+    if (enabled.length === 0) {
+        showWhatsHappening('No enabled training examples! Add or enable some examples.');
+        return null;
+    }
+
+    const ex = enabled[Math.floor(Math.random() * enabled.length)];
+    const inputs = normalizeInputs(ex);
+    const result = nn.train(inputs, ex.target);
+    totalSteps++;
+
+    lossHistory.push(result.loss);
+    accuracyHistory.push(computeAccuracy());
+
+    showWhatsHappening(
+        `<strong>Step ${totalSteps}:</strong> Used example (Cal: ${ex.cal}, $${ex.price.toFixed(2)}, ${ex.review.toFixed(1)}★, ${ex.activity}%). ` +
+        `Target: ${ex.target === 1 ? 'Eat' : "Don't"} → Predicted: ${result.output.toFixed(3)} → Loss: ${result.loss.toFixed(4)}`
+    );
+
+    pulseNeurons();
+    updatePrediction();
+    updateMetrics(result.loss);
+    renderExamples();
+    drawLossGraph();
+    document.getElementById('step-progress').textContent = `Step ${totalSteps}`;
+    return result;
+}
+
+function showWhatsHappening(html) {
+    const el = document.getElementById('whats-happening');
+    el.innerHTML = html;
+    el.classList.add('visible');
+}
+
+// ══════════════════════════════════════════
+//  EVENT LISTENERS
+// ══════════════════════════════════════════
+
+// Sliders
+['slider-cal', 'slider-price', 'slider-review', 'slider-activity'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+        updateSliderDisplays();
+        updatePrediction();
+    });
+});
+
+// Learning rate
+document.getElementById('slider-lr').addEventListener('input', e => {
+    nn.learningRate = parseFloat(e.target.value);
+    document.getElementById('lr-val').textContent = nn.learningRate.toFixed(3);
+});
+
+// Training steps count
+document.getElementById('slider-steps').addEventListener('input', e => {
+    document.getElementById('steps-val').textContent = e.target.value;
+});
+
+// Speed
+document.getElementById('slider-speed').addEventListener('input', e => {
+    document.getElementById('speed-val').textContent = e.target.value + '/sec';
+});
+
+// Decision toggle
+document.getElementById('btn-eat').addEventListener('click', () => {
+    decisionLabel = 1;
+    document.getElementById('btn-eat').className = 'active-eat';
+    document.getElementById('btn-dont').className = '';
+});
+document.getElementById('btn-dont').addEventListener('click', () => {
+    decisionLabel = 0;
+    document.getElementById('btn-dont').className = 'active-dont';
+    document.getElementById('btn-eat').className = '';
+});
+
+// Add training example
+document.getElementById('btn-add-example').addEventListener('click', () => {
+    const inp = getCurrentInputs();
+    trainingExamples.push({
+        cal: inp.cal,
+        price: inp.price,
+        review: inp.review,
+        activity: inp.activity,
+        target: decisionLabel,
+        preloaded: false,
+        enabled: true,
+    });
+    renderExamples();
+});
+
+// Clear user examples
+document.getElementById('btn-clear-examples').addEventListener('click', () => {
+    trainingExamples = trainingExamples.filter(e => e.preloaded);
+    renderExamples();
+});
+
+// Step button
+document.getElementById('btn-step').addEventListener('click', () => {
+    if (isTraining) return;
+    doStep();
+});
+
+// Train button
+document.getElementById('btn-train').addEventListener('click', () => {
+    const btn = document.getElementById('btn-train');
+
+    if (isTraining) {
+        // Pause
+        clearInterval(trainInterval);
+        isTraining = false;
+        btn.textContent = 'Train';
+        btn.className = 'btn btn-success';
+        return;
+    }
+
+    isTraining = true;
+    btn.textContent = 'Pause';
+    btn.className = 'btn btn-warning';
+
+    trainTargetSteps = parseInt(document.getElementById('slider-steps').value);
+    trainCurrentStep = 0;
+
+    const speed = parseInt(document.getElementById('slider-speed').value);
+    const interval = 1000 / speed;
+
+    trainInterval = setInterval(() => {
+        doStep();
+        trainCurrentStep++;
+        document.getElementById('step-progress').textContent =
+            `Step ${totalSteps} (${trainCurrentStep}/${trainTargetSteps})`;
+
+        if (trainCurrentStep >= trainTargetSteps) {
+            clearInterval(trainInterval);
+            isTraining = false;
+            btn.textContent = 'Train';
+            btn.className = 'btn btn-success';
+        }
+    }, interval);
+});
+
+// Reset button
+document.getElementById('btn-reset').addEventListener('click', () => {
+    if (!confirm('Reset network weights?')) return;
+
+    if (isTraining) {
+        clearInterval(trainInterval);
+        isTraining = false;
+        document.getElementById('btn-train').textContent = 'Train';
+        document.getElementById('btn-train').className = 'btn btn-success';
+    }
+
+    nn.reset();
+    totalSteps = 0;
+    lossHistory = [];
+    accuracyHistory = [];
+    document.getElementById('step-progress').textContent = 'Step 0';
+    document.getElementById('whats-happening').classList.remove('visible');
+
+    updatePrediction();
+    updateMetrics(undefined);
+    document.getElementById('metric-loss').textContent = '—';
+    document.getElementById('metric-loss').style.color = '#6b7280';
+    document.getElementById('metric-steps').textContent = '0';
+    updateVisualization();
+    renderExamples();
+    drawLossGraph();
+});
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+buildNetwork();
+updateSliderDisplays();
+updatePrediction();
+updateMetrics();
+renderExamples();
+setTimeout(resizeLossCanvas, 50);
+</script>
+</body>
+</html>
