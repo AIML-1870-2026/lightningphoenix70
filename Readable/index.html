@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Readability Explorer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <style>
+    /* ── CSS Variables ──────────────────────────────────────────────── */
+    :root {
+      --bg-deep:      #0d0f0e;
+      --panel:        #141918;
+      --panel-raised: #1c2220;
+      --border:       #2a3530;
+      --phosphor:     #39ff88;
+      --phosphor-dim: #1a7a44;
+      --amber:        #ffb347;
+      --text-primary: #c8d8d0;
+      --text-muted:   #5a7065;
+      --red-fail:     #ff4455;
+      --green-pass:   #39ff88;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Space Mono', monospace;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      border-top: 4px solid var(--phosphor);
+      padding-bottom: 3rem;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    header {
+      padding: 1.5rem 2rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .header-title {
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--phosphor);
+      text-shadow: 0 0 12px #39ff88aa, 0 0 28px #39ff8833;
+    }
+
+    .cursor {
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    .header-sub {
+      margin-top: 0.4rem;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* ── Main container ──────────────────────────────────────────────── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ── Panel base ──────────────────────────────────────────────────── */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid transparent;
+      border-radius: 6px;
+      padding: 1.25rem 1.25rem 1rem;
+      transition: border-left-color 0.2s;
+    }
+
+    .panel:focus-within {
+      border-left-color: var(--phosphor);
+    }
+
+    .panel-label {
+      font-size: 0.62rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .panel-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Layout rows ─────────────────────────────────────────────────── */
+    .controls-top {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .controls-bottom {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 1rem;
+    }
+
+    /* ── Slider rows ─────────────────────────────────────────────────── */
+    .slider-row {
+      display: grid;
+      grid-template-columns: 38px 1fr 56px;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.65rem;
+    }
+
+    .ch-label {
+      font-size: 0.58rem;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    /* Range base */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Thumb – WebKit */
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    input[type="range"]:hover::-webkit-slider-thumb,
+    input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.25); }
+
+    /* Thumb – Firefox */
+    input[type="range"]::-moz-range-thumb {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+    }
+
+    /* Red channel */
+    .sl-r input[type="range"] { background: linear-gradient(to right, #1a0000, #cc0000); }
+    .sl-r input[type="range"]::-webkit-slider-thumb { background: #ff4040; box-shadow: 0 0 6px #ff404088; }
+    .sl-r input[type="range"]:hover::-webkit-slider-thumb,
+    .sl-r input[type="range"]:active::-webkit-slider-thumb { box-shadow: 0 0 14px #ff4040cc; }
+    .sl-r input[type="range"]::-moz-range-thumb { background: #ff4040; }
+
+    /* Green channel */
+    .sl-g input[type="range"] { background: linear-gradient(to right, #001a00, #00cc00); }
+    .sl-g input[type="range"]::-webkit-slider-thumb { background: #40ff40; box-shadow: 0 0 6px #40ff4088; }
+    .sl-g input[type="range"]:hover::-webkit-slider-thumb,
+    .sl-g input[type="range"]:active::-webkit-slider-thumb { box-shadow: 0 0 14px #40ff40cc; }
+    .sl-g input[type="range"]::-moz-range-thumb { background: #40ff40; }
+
+    /* Blue channel */
+    .sl-b input[type="range"] { background: linear-gradient(to right, #00001a, #0000cc); }
+    .sl-b input[type="range"]::-webkit-slider-thumb { background: #4466ff; box-shadow: 0 0 6px #4466ff88; }
+    .sl-b input[type="range"]:hover::-webkit-slider-thumb,
+    .sl-b input[type="range"]:active::-webkit-slider-thumb { box-shadow: 0 0 14px #4466ffcc; }
+    .sl-b input[type="range"]::-moz-range-thumb { background: #4466ff; }
+
+    /* Font size slider */
+    .sl-size input[type="range"] { background: linear-gradient(to right, var(--phosphor-dim), var(--phosphor)); }
+    .sl-size input[type="range"]::-webkit-slider-thumb { background: var(--phosphor); box-shadow: 0 0 6px #39ff8888; }
+    .sl-size input[type="range"]:hover::-webkit-slider-thumb,
+    .sl-size input[type="range"]:active::-webkit-slider-thumb { box-shadow: 0 0 16px #39ff88cc; }
+    .sl-size input[type="range"]::-moz-range-thumb { background: var(--phosphor); }
+
+    /* Number inputs */
+    .num-in {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      background: var(--panel-raised);
+      border: 1px solid var(--border);
+      color: var(--phosphor);
+      padding: 0.2rem 0.35rem;
+      width: 56px;
+      text-align: right;
+      border-radius: 3px;
+      outline: none;
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    .num-in::-webkit-outer-spin-button,
+    .num-in::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .num-in:focus { border-color: var(--phosphor); box-shadow: 0 0 0 1px var(--phosphor); }
+
+    /* Color swatches */
+    .swatch {
+      margin-top: 0.9rem;
+      width: 100%;
+      height: 54px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.35);
+      transition: background-color 0.08s, color 0.08s;
+      user-select: none;
+    }
+
+    /* ── Font Size Panel ─────────────────────────────────────────────── */
+    .size-inner { display: flex; flex-direction: column; gap: 0.5rem; }
+
+    .size-row {
+      display: grid;
+      grid-template-columns: 1fr 56px;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .size-unit {
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    /* ── Contrast Panel ──────────────────────────────────────────────── */
+    .contrast-inner { display: flex; flex-direction: column; gap: 0.85rem; }
+
+    .ratio-num {
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--phosphor);
+      text-shadow: 0 0 14px #39ff88aa;
+      transition: color 0.35s, text-shadow 0.35s;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ratio-num.state-warn { color: var(--amber);    text-shadow: 0 0 14px #ffb34799; }
+    .ratio-num.state-fail { color: var(--red-fail); text-shadow: 0 0 14px #ff445599; }
+
+    .badge-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+    .badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.57rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.22rem 0.55rem;
+      border-radius: 3px;
+      border: 1px solid;
+      transition: background 0.3s, border-color 0.3s, color 0.3s;
+    }
+
+    .badge.pass { background: rgba(57,255,136,0.12); border-color: var(--green-pass); color: var(--green-pass); }
+    .badge.fail { background: rgba(255,68,85,0.10);  border-color: var(--red-fail);   color: var(--red-fail);   }
+
+    .lum-block { display: flex; flex-direction: column; gap: 0.28rem; }
+
+    .lum-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.64rem;
+    }
+
+    .lum-key { color: var(--text-muted); }
+    .lum-val { color: var(--text-primary); font-weight: 700; }
+    .lum-note { font-size: 0.54rem; color: var(--text-muted); margin-top: 0.15rem; font-style: italic; }
+
+    /* ── Presets ─────────────────────────────────────────────────────── */
+    .presets-scroll {
+      display: flex;
+      gap: 0.65rem;
+      overflow-x: auto;
+      padding-bottom: 0.4rem;
+      scrollbar-width: thin;
+      scrollbar-color: var(--phosphor-dim) var(--panel-raised);
+    }
+
+    .presets-scroll::-webkit-scrollbar        { height: 4px; }
+    .presets-scroll::-webkit-scrollbar-track  { background: var(--panel-raised); }
+    .presets-scroll::-webkit-scrollbar-thumb  { background: var(--phosphor-dim); border-radius: 2px; }
+
+    .preset-btn {
+      flex-shrink: 0;
+      background: var(--panel-raised);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 0.5rem 0.5rem 0.45rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      width: 88px;
+      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+      font-family: 'Space Mono', monospace;
+    }
+
+    .preset-btn:hover {
+      transform: scale(1.07);
+      border-color: var(--phosphor);
+      box-shadow: 0 0 10px #39ff8844;
+    }
+
+    .preset-preview {
+      width: 68px;
+      height: 40px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.62rem;
+      font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+
+    .preset-footer {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .preset-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .dot-good { background: var(--green-pass); box-shadow: 0 0 4px #39ff8888; }
+    .dot-warn { background: var(--amber);      box-shadow: 0 0 4px #ffb34788; }
+    .dot-bad  { background: var(--red-fail);   box-shadow: 0 0 4px #ff445588; }
+
+    .preset-name {
+      font-size: 0.53rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 62px;
+    }
+
+    /* ── Display Viewport ────────────────────────────────────────────── */
+    #display-viewport {
+      border: 2px solid var(--phosphor-dim);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .viewport-header {
+      background: var(--panel);
+      padding: 0.45rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .viewport-header-label {
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .viewport-meta {
+      font-size: 0.55rem;
+      color: var(--text-muted);
+      font-family: 'Space Mono', monospace;
+    }
+
+    .viewport-bezel {
+      background: var(--panel);
+      padding: 6px;
+    }
+
+    .viewport-screen {
+      position: relative;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .scanlines {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,0.05) 3px,
+        rgba(0,0,0,0.05) 4px
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .corner {
+      position: absolute;
+      font-size: 0.7rem;
+      color: var(--phosphor-dim);
+      font-family: 'Space Mono', monospace;
+      line-height: 1;
+      pointer-events: none;
+      z-index: 3;
+    }
+    .corner-tl { top: 5px;    left: 7px;   }
+    .corner-tr { top: 5px;    right: 7px;  }
+    .corner-bl { bottom: 5px; left: 7px;   }
+    .corner-br { bottom: 5px; right: 7px;  }
+
+    #text-display {
+      padding: 2rem 2.5rem;
+      font-family: 'DM Serif Display', serif;
+      line-height: 1.75;
+      position: relative;
+      z-index: 1;
+      transition: background-color 0.08s, color 0.08s;
+      min-height: 220px;
+    }
+
+    #text-display p + p { margin-top: 0.6em; }
+
+    /* ── Responsive ──────────────────────────────────────────────────── */
+    @media (max-width: 860px) {
+      .controls-bottom { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      .controls-top    { grid-template-columns: 1fr; }
+      .controls-bottom { grid-template-columns: 1fr; }
+    }
+
+    /* ── Focus ───────────────────────────────────────────────────────── */
+    :focus-visible { outline: 2px solid var(--phosphor); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-title">READABILITY EXPLORER <span class="cursor">█</span></div>
+    <div class="header-sub">WCAG 2.1 · Contrast Analysis Lab</div>
+  </header>
+
+  <main>
+
+    <!-- TOP ROW: Background + Text Color panels -->
+    <div class="controls-top">
+
+      <!-- Background Color -->
+      <section class="panel" id="bg-panel">
+        <div class="panel-label">Background Color</div>
+
+        <div class="slider-row sl-r">
+          <label class="ch-label" for="bg-r">RED</label>
+          <input type="range" id="bg-r" min="0" max="255" value="255"
+                 aria-label="Background red channel, 0 to 255" />
+          <input type="number" class="num-in" id="bg-r-n" min="0" max="255" value="255" />
+        </div>
+        <div class="slider-row sl-g">
+          <label class="ch-label" for="bg-g">GRN</label>
+          <input type="range" id="bg-g" min="0" max="255" value="255"
+                 aria-label="Background green channel, 0 to 255" />
+          <input type="number" class="num-in" id="bg-g-n" min="0" max="255" value="255" />
+        </div>
+        <div class="slider-row sl-b">
+          <label class="ch-label" for="bg-b">BLU</label>
+          <input type="range" id="bg-b" min="0" max="255" value="255"
+                 aria-label="Background blue channel, 0 to 255" />
+          <input type="number" class="num-in" id="bg-b-n" min="0" max="255" value="255" />
+        </div>
+        <div class="swatch" id="bg-swatch" aria-hidden="true">#FFFFFF</div>
+      </section>
+
+      <!-- Text Color -->
+      <section class="panel" id="fg-panel">
+        <div class="panel-label">Text Color</div>
+
+        <div class="slider-row sl-r">
+          <label class="ch-label" for="fg-r">RED</label>
+          <input type="range" id="fg-r" min="0" max="255" value="0"
+                 aria-label="Text red channel, 0 to 255" />
+          <input type="number" class="num-in" id="fg-r-n" min="0" max="255" value="0" />
+        </div>
+        <div class="slider-row sl-g">
+          <label class="ch-label" for="fg-g">GRN</label>
+          <input type="range" id="fg-g" min="0" max="255" value="0"
+                 aria-label="Text green channel, 0 to 255" />
+          <input type="number" class="num-in" id="fg-g-n" min="0" max="255" value="0" />
+        </div>
+        <div class="slider-row sl-b">
+          <label class="ch-label" for="fg-b">BLU</label>
+          <input type="range" id="fg-b" min="0" max="255" value="0"
+                 aria-label="Text blue channel, 0 to 255" />
+          <input type="number" class="num-in" id="fg-b-n" min="0" max="255" value="0" />
+        </div>
+        <div class="swatch" id="fg-swatch" aria-hidden="true">#000000</div>
+      </section>
+
+    </div>
+
+    <!-- BOTTOM ROW: Font Size + Contrast Analysis -->
+    <div class="controls-bottom">
+
+      <!-- Font Size -->
+      <section class="panel" id="size-panel">
+        <div class="panel-label">Font Size</div>
+        <div class="size-inner">
+          <div class="size-row sl-size">
+            <input type="range" id="font-sz" min="8" max="96" value="18"
+                   aria-label="Font size, 8 to 96 pixels" />
+            <input type="number" class="num-in" id="font-sz-n" min="8" max="96" value="18" />
+          </div>
+          <div class="size-unit">px</div>
+        </div>
+      </section>
+
+      <!-- Contrast Analysis -->
+      <section class="panel" id="contrast-panel">
+        <div class="panel-label">Contrast Analysis</div>
+        <div class="contrast-inner" aria-live="polite" aria-label="Contrast analysis results">
+          <div class="ratio-num" id="ratio-num">21.00 : 1</div>
+          <div class="badge-row">
+            <span class="badge pass" id="b-aa-n">AA Normal</span>
+            <span class="badge pass" id="b-aa-l">AA Large</span>
+            <span class="badge pass" id="b-aaa-n">AAA Normal</span>
+            <span class="badge pass" id="b-aaa-l">AAA Large</span>
+          </div>
+          <div class="lum-block">
+            <div class="lum-line">
+              <span class="lum-key">BG LUM</span>
+              <span class="lum-val" id="bg-lum">1.0000</span>
+            </div>
+            <div class="lum-line">
+              <span class="lum-key">FG LUM</span>
+              <span class="lum-val" id="fg-lum">0.0000</span>
+            </div>
+            <div class="lum-note">(relative luminance per WCAG 2.1)</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- PRESETS -->
+    <section class="panel" id="presets-panel">
+      <div class="panel-label">Preset Combinations</div>
+      <div class="presets-scroll" id="presets-scroll"
+           role="group" aria-label="Color combination presets"></div>
+    </section>
+
+    <!-- DISPLAY VIEWPORT -->
+    <div id="display-viewport">
+      <div class="viewport-header">
+        <span class="viewport-header-label">Display Viewport</span>
+        <span class="viewport-meta" id="viewport-meta"></span>
+      </div>
+      <div class="viewport-bezel">
+        <div class="viewport-screen">
+          <div class="scanlines"></div>
+          <span class="corner corner-tl">╔</span>
+          <span class="corner corner-tr">╗</span>
+          <span class="corner corner-bl">╚</span>
+          <span class="corner corner-br">╝</span>
+          <div id="text-display">
+            <p>The quick brown fox jumps over the lazy dog.</p>
+            <p>Pack my box with five dozen liquor jugs.</p>
+            <p>Sphinx of black quartz, judge my vow.</p>
+            <p>How vexingly quick daft zebras jump!</p>
+            <p>Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm<br>
+               Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz</p>
+            <p>0 1 2 3 4 5 6 7 8 9<br>
+               ! @ # $ % ^ &amp; * ( ) - + = [ ] { } | ; : , . &lt; &gt; ? /</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // ── State ────────────────────────────────────────────────────────────────
+    const state = {
+      bg: { r: 255, g: 255, b: 255 },
+      fg: { r: 0,   g: 0,   b: 0   },
+      fontSize: 18
+    };
+
+    // ── Preset data ──────────────────────────────────────────────────────────
+    const PRESETS = [
+      { label: 'Classic',    bg: [255, 255, 255], fg: [0,   0,   0  ], cat: 'good' },
+      { label: 'Inverted',   bg: [0,   0,   0  ], fg: [255, 255, 255], cat: 'good' },
+      { label: 'Newspaper',  bg: [245, 240, 232], fg: [26,  26,  26 ], cat: 'good' },
+      { label: 'Navy+Gold',  bg: [27,  42,  74 ], fg: [255, 215, 0  ], cat: 'good' },
+      { label: 'Terminal',   bg: [13,  17,  23 ], fg: [57,  255, 136], cat: 'good' },
+      { label: 'Solarized',  bg: [253, 246, 227], fg: [101, 123, 131], cat: 'warn' },
+      { label: 'Ocean',      bg: [0,   119, 182], fg: [144, 224, 239], cat: 'warn' },
+      { label: 'Muted Moss', bg: [138, 154, 122], fg: [107, 122, 92 ], cat: 'bad'  },
+      { label: 'Gray Haze',  bg: [170, 170, 170], fg: [153, 153, 153], cat: 'bad'  },
+      { label: 'Red Alert',  bg: [255, 0,   0  ], fg: [255, 102, 102], cat: 'bad'  },
+      { label: 'Lavender',   bg: [230, 230, 250], fg: [216, 191, 216], cat: 'bad'  },
+      { label: 'Parchment',  bg: [245, 222, 179], fg: [218, 165, 32 ], cat: 'bad'  },
+    ];
+
+    // ── DOM references ───────────────────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const el = {
+      bgR: $('bg-r'), bgG: $('bg-g'), bgB: $('bg-b'),
+      bgRn: $('bg-r-n'), bgGn: $('bg-g-n'), bgBn: $('bg-b-n'),
+      bgSwatch: $('bg-swatch'),
+
+      fgR: $('fg-r'), fgG: $('fg-g'), fgB: $('fg-b'),
+      fgRn: $('fg-r-n'), fgGn: $('fg-g-n'), fgBn: $('fg-b-n'),
+      fgSwatch: $('fg-swatch'),
+
+      fontSize:  $('font-sz'),
+      fontSizeN: $('font-sz-n'),
+
+      ratioNum: $('ratio-num'),
+      bAAn:  $('b-aa-n'),  bAAl:  $('b-aa-l'),
+      bAAAn: $('b-aaa-n'), bAAAl: $('b-aaa-l'),
+      bgLum: $('bg-lum'),  fgLum: $('fg-lum'),
+
+      textDisplay:  $('text-display'),
+      presetsScroll: $('presets-scroll'),
+      viewportMeta:  $('viewport-meta'),
+    };
+
+    // ── WCAG 2.1 calculations ────────────────────────────────────────────────
+    function linearize(v) {
+      const s = v / 255;
+      return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    }
+
+    function luminance(r, g, b) {
+      return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b);
+    }
+
+    function contrastRatio(La, Lb) {
+      const hi = Math.max(La, Lb), lo = Math.min(La, Lb);
+      return (hi + 0.05) / (lo + 0.05);
+    }
+
+    // ── Utilities ────────────────────────────────────────────────────────────
+    function toHex(r, g, b) {
+      return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0').toUpperCase()).join('');
+    }
+
+    function autoTextColor(r, g, b) {
+      return luminance(r, g, b) > 0.179 ? '#000000' : '#ffffff';
+    }
+
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, Math.round(+v)));
+    }
+
+    // ── Update pipeline ──────────────────────────────────────────────────────
+    function updateAll() {
+      const bgHex = toHex(state.bg.r, state.bg.g, state.bg.b);
+      const fgHex = toHex(state.fg.r, state.fg.g, state.fg.b);
+
+      // Swatches
+      el.bgSwatch.style.backgroundColor = bgHex;
+      el.bgSwatch.style.color = autoTextColor(state.bg.r, state.bg.g, state.bg.b);
+      el.bgSwatch.textContent = bgHex;
+
+      el.fgSwatch.style.backgroundColor = fgHex;
+      el.fgSwatch.style.color = autoTextColor(state.fg.r, state.fg.g, state.fg.b);
+      el.fgSwatch.textContent = fgHex;
+
+      // Display viewport
+      el.textDisplay.style.backgroundColor = bgHex;
+      el.textDisplay.style.color           = fgHex;
+      el.textDisplay.style.fontSize        = state.fontSize + 'px';
+
+      // Contrast
+      const Lbg = luminance(state.bg.r, state.bg.g, state.bg.b);
+      const Lfg = luminance(state.fg.r, state.fg.g, state.fg.b);
+      const ratio = contrastRatio(Lbg, Lfg);
+
+      el.ratioNum.textContent = ratio.toFixed(2) + ' : 1';
+      el.ratioNum.classList.remove('state-warn', 'state-fail');
+      if      (ratio < 3.0) el.ratioNum.classList.add('state-fail');
+      else if (ratio < 4.5) el.ratioNum.classList.add('state-warn');
+
+      // WCAG badges
+      // AA Normal  ≥ 4.5 | AA Large   ≥ 3.0
+      // AAA Normal ≥ 7.0 | AAA Large  ≥ 4.5
+      setBadge(el.bAAn,  ratio >= 4.5);
+      setBadge(el.bAAl,  ratio >= 3.0);
+      setBadge(el.bAAAn, ratio >= 7.0);
+      setBadge(el.bAAAl, ratio >= 4.5);
+
+      // Luminance readouts
+      el.bgLum.textContent = Lbg.toFixed(4);
+      el.fgLum.textContent = Lfg.toFixed(4);
+
+      // Viewport meta
+      el.viewportMeta.textContent =
+        `${state.fontSize}px  ·  BG ${bgHex}  /  FG ${fgHex}`;
+    }
+
+    function setBadge(elem, pass) {
+      elem.classList.toggle('pass',  pass);
+      elem.classList.toggle('fail', !pass);
+    }
+
+    // ── Two-way slider ↔ input binding ───────────────────────────────────────
+    function wireColor(slider, numIn, obj, key) {
+      slider.addEventListener('input', () => {
+        obj[key] = +slider.value;
+        numIn.value = obj[key];
+        updateAll();
+      });
+
+      numIn.addEventListener('input', () => {
+        const v = parseInt(numIn.value, 10);
+        if (!isNaN(v)) {
+          obj[key] = clamp(v, 0, 255);
+          slider.value = obj[key];
+          updateAll();
+        }
+      });
+
+      numIn.addEventListener('blur', () => {
+        const v = parseInt(numIn.value, 10);
+        obj[key] = isNaN(v) ? obj[key] : clamp(v, 0, 255);
+        slider.value = numIn.value = obj[key];
+        updateAll();
+      });
+    }
+
+    wireColor(el.bgR, el.bgRn, state.bg, 'r');
+    wireColor(el.bgG, el.bgGn, state.bg, 'g');
+    wireColor(el.bgB, el.bgBn, state.bg, 'b');
+    wireColor(el.fgR, el.fgRn, state.fg, 'r');
+    wireColor(el.fgG, el.fgGn, state.fg, 'g');
+    wireColor(el.fgB, el.fgBn, state.fg, 'b');
+
+    // Font size binding
+    el.fontSize.addEventListener('input', () => {
+      state.fontSize = +el.fontSize.value;
+      el.fontSizeN.value = state.fontSize;
+      updateAll();
+    });
+
+    el.fontSizeN.addEventListener('input', () => {
+      const v = parseInt(el.fontSizeN.value, 10);
+      if (!isNaN(v)) {
+        state.fontSize = clamp(v, 8, 96);
+        el.fontSize.value = state.fontSize;
+        updateAll();
+      }
+    });
+
+    el.fontSizeN.addEventListener('blur', () => {
+      const v = parseInt(el.fontSizeN.value, 10);
+      state.fontSize = isNaN(v) ? state.fontSize : clamp(v, 8, 96);
+      el.fontSize.value = el.fontSizeN.value = state.fontSize;
+      updateAll();
+    });
+
+    // ── Build preset tiles ───────────────────────────────────────────────────
+    function buildPresets() {
+      PRESETS.forEach(p => {
+        const [br, bg, bb] = p.bg;
+        const [fr, fg, fb] = p.fg;
+
+        const btn = document.createElement('button');
+        btn.className = 'preset-btn';
+        btn.type = 'button';
+        btn.setAttribute('aria-label', `Load "${p.label}" preset`);
+
+        const preview = document.createElement('div');
+        preview.className = 'preset-preview';
+        preview.style.backgroundColor = toHex(br, bg, bb);
+        preview.style.color = toHex(fr, fg, fb);
+        preview.textContent = 'Aa 01';
+
+        const footer = document.createElement('div');
+        footer.className = 'preset-footer';
+
+        const dot = document.createElement('div');
+        dot.className = `preset-dot dot-${p.cat}`;
+
+        const name = document.createElement('div');
+        name.className = 'preset-name';
+        name.textContent = p.label;
+
+        footer.appendChild(dot);
+        footer.appendChild(name);
+        btn.appendChild(preview);
+        btn.appendChild(footer);
+
+        btn.addEventListener('click', () => {
+          state.bg.r = br; state.bg.g = bg; state.bg.b = bb;
+          state.fg.r = fr; state.fg.g = fg; state.fg.b = fb;
+
+          el.bgR.value = br; el.bgRn.value = br;
+          el.bgG.value = bg; el.bgGn.value = bg;
+          el.bgB.value = bb; el.bgBn.value = bb;
+          el.fgR.value = fr; el.fgRn.value = fr;
+          el.fgG.value = fg; el.fgGn.value = fg;
+          el.fgB.value = fb; el.fgBn.value = fb;
+
+          updateAll();
+        });
+
+        el.presetsScroll.appendChild(btn);
+      });
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+    buildPresets();
+    updateAll();
+  </script>
+
+</body>
+</html>
