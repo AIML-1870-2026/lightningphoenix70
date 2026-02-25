@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dreamy Blackjack</title>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #fce4ec;
+  --felt: #e8eaf6;
+  --accent1: #f48fb1;
+  --accent2: #90caf9;
+  --text: #4a148c;
+  --btn: #f48fb1;
+  --btn-hover: #f06292;
+  --win-glow: #f48fb1;
+  --loss-glow: #90caf9;
+  --card-border: #f48fb1;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Quicksand', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 70px;
+  transition: background 0.5s;
+}
+
+/* TOP BAR */
+#top-bar {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#balance-display {
+  font-size: 1.3rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#balance-display span { font-size: 0.85rem; font-weight: 500; }
+.odometer {
+  display: inline-block;
+  min-width: 80px;
+  text-align: right;
+}
+#streak-display {
+  font-size: 1.1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#streak-display.hot { color: #e91e63; animation: pulse 1s infinite; }
+#streak-num { display: inline-block; transition: transform 0.2s; }
+#streak-num.bounce { animation: bounce-scale 0.3s ease; }
+.top-btns { display: flex; gap: 8px; }
+.top-btn {
+  background: var(--accent1);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 7px 16px;
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+.top-btn:hover { background: var(--btn-hover); transform: scale(1.05); }
+.top-btn:active { transform: scale(0.97); }
+
+/* MAIN AREA */
+#main {
+  width: 100%;
+  max-width: 900px;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* TABLE FELT */
+#table {
+  background: var(--felt);
+  border-radius: 24px;
+  padding: 24px 20px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  transition: background 0.5s, box-shadow 0.5s;
+  position: relative;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+#table.glow-win { animation: glow-win 0.8s ease; }
+#table.glow-loss { animation: glow-loss 0.8s ease; }
+#table.glow-push { animation: glow-push 0.8s ease; }
+
+/* HAND AREAS */
+.hand-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+.score-badge {
+  display: inline-block;
+  background: var(--accent1);
+  color: #fff;
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-left: 8px;
+  transition: background 0.3s;
+}
+.score-badge.bust { background: #e53935; }
+.score-badge.blackjack { background: #8e24aa; }
+
+.cards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 120px;
+  align-items: center;
+}
+
+/* CARDS */
+.card {
+  width: 72px;
+  height: 108px;
+  background: #fff;
+  border-radius: 12px;
+  border: 2px solid var(--card-border);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 5px;
+  position: relative;
+  perspective: 500px;
+  transform-style: preserve-3d;
+  font-family: 'Georgia', serif;
+  animation: card-deal 0.4s ease-out;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+  animation: shimmer 0.6s ease 0.1s forwards;
+}
+.card.face-down {
+  background: linear-gradient(135deg, var(--accent1) 0%, var(--accent2) 100%);
+  border-color: #fff;
+}
+.card.face-down::before {
+  content: '🂠';
+  font-size: 2.5rem;
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.4;
+}
+.card.flip-reveal { animation: flip-reveal 0.6s ease forwards; }
+
+.card-corner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  font-size: 1rem;
+  font-weight: bold;
+}
+.card-corner.bottom-right {
+  align-self: flex-end;
+  transform: rotate(180deg);
+}
+.card-suit-center {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem;
+  line-height: 1;
+}
+.red { color: #e91e63; }
+.navy { color: #1a237e; }
+
+/* RESULT MESSAGE */
+#result-msg {
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  min-height: 40px;
+  transition: opacity 0.3s;
+}
+
+/* DECK INDICATOR */
+#deck-indicator {
+  position: absolute;
+  top: 16px; right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: default;
+}
+.deck-stack {
+  width: 44px;
+  height: 62px;
+  background: linear-gradient(135deg, var(--accent1), var(--accent2));
+  border-radius: 8px;
+  border: 2px solid #fff;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.15), 4px 4px 0 rgba(0,0,0,0.08);
+}
+#deck-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+/* BET PANEL */
+#bet-panel {
+  background: rgba(255,255,255,0.5);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+#bet-display {
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#bet-amount {
+  background: var(--accent1);
+  color: #fff;
+  border-radius: 12px;
+  padding: 4px 18px;
+  min-width: 80px;
+  text-align: center;
+  transition: transform 0.1s;
+}
+#bet-amount.tick { animation: tick-up 0.2s ease; }
+.chips-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.chip {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px dashed rgba(255,255,255,0.7);
+  color: #fff;
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chip:hover { transform: scale(1.1); box-shadow: 0 5px 14px rgba(0,0,0,0.22); }
+.chip:active { animation: chip-bounce 0.2s ease; }
+.chip.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+.chip[data-val="5"]   { background: #f48fb1; }
+.chip[data-val="10"]  { background: #90caf9; }
+.chip[data-val="25"]  { background: #ce93d8; }
+.chip[data-val="50"]  { background: #a5d6a7; }
+.chip[data-val="100"] { background: #ffab91; }
+.chip[data-val="500"] { background: #ef9a9a; }
+
+/* ACTION BUTTONS */
+#action-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.action-btn {
+  background: var(--btn);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 12px 28px;
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+}
+.action-btn:hover { background: var(--btn-hover); transform: scale(1.05); }
+.action-btn:active { transform: scale(0.97); }
+.action-btn.secondary { background: var(--accent2); }
+.action-btn.secondary:hover { background: #64b5f6; }
+.action-btn.danger { background: #ef9a9a; }
+.action-btn.danger:hover { background: #e57373; }
+
+/* INSURANCE PROMPT */
+#insurance-prompt {
+  text-align: center;
+  padding: 10px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+/* SPLIT HANDS */
+#split-hands {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+.split-hand {
+  flex: 1;
+  background: rgba(255,255,255,0.3);
+  border-radius: 12px;
+  padding: 10px;
+  border: 2px solid transparent;
+  transition: border-color 0.3s;
+}
+.split-hand.active { border-color: var(--accent1); }
+
+/* HISTORY TRACKER */
+#history-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px);
+  border-top: 2px solid var(--accent1);
+  z-index: 100;
+  transition: transform 0.3s ease;
+}
+#history-bar.collapsed #history-content { display: none; }
+#history-toggle {
+  width: 100%;
+  padding: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+#history-content {
+  padding: 6px 16px 10px;
+  overflow-x: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.history-chip {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+.history-chip.win  { background: #a5d6a7; color: #1b5e20; }
+.history-chip.loss { background: #ef9a9a; color: #b71c1c; }
+.history-chip.push { background: #fff176; color: #827717; }
+.history-chip:hover .tooltip { display: block; }
+.tooltip {
+  display: none;
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #4a148c;
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  z-index: 200;
+  font-family: 'Quicksand', sans-serif;
+}
+.tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #4a148c;
+}
+
+/* MODALS */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(74,20,140,0.25);
+  backdrop-filter: blur(6px);
+  z-index: 300;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.active { display: flex; }
+.modal {
+  background: #fff;
+  border-radius: 24px;
+  padding: 28px;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  animation: modal-in 0.3s ease;
+}
+.modal h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--text);
+}
+.modal-close {
+  float: right;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: var(--text);
+  line-height: 1;
+  margin-top: -4px;
+}
+
+/* THEME GRID */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.theme-tile {
+  border-radius: 14px;
+  padding: 12px;
+  cursor: pointer;
+  border: 3px solid transparent;
+  transition: border-color 0.2s, transform 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.theme-tile:hover { transform: scale(1.03); }
+.theme-tile.selected { border-color: #4a148c; }
+.theme-tile.locked { opacity: 0.55; cursor: not-allowed; }
+.theme-tile .lock-icon {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-size: 1rem;
+}
+.theme-name { font-weight: 700; font-size: 0.9rem; color: #4a148c; }
+.theme-unlock { font-size: 0.72rem; color: #888; margin-top: 2px; }
+
+/* ACHIEVEMENTS GRID */
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.achievement-tile {
+  border-radius: 14px;
+  padding: 12px 8px;
+  text-align: center;
+  background: var(--bg);
+  border: 2px solid var(--card-border);
+  transition: transform 0.2s;
+}
+.achievement-tile.locked { opacity: 0.4; filter: grayscale(1); }
+.achievement-icon { font-size: 1.8rem; }
+.achievement-name { font-weight: 700; font-size: 0.8rem; margin-top: 4px; color: var(--text); }
+.achievement-desc { font-size: 0.68rem; color: #888; margin-top: 2px; }
+
+/* BADGE POP-UP */
+#badge-popup {
+  position: fixed;
+  top: 16px; right: 16px;
+  z-index: 400;
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 18px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.16);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 260px;
+  transform: translateX(300px);
+  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  border-left: 4px solid var(--accent1);
+}
+#badge-popup.show { transform: translateX(0); }
+#badge-popup-icon { font-size: 2rem; }
+#badge-popup-text { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+#badge-popup-sub { font-size: 0.75rem; color: #888; }
+
+/* GAME OVER */
+#gameover-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(74,20,140,0.35);
+  backdrop-filter: blur(8px);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 0.5s ease;
+}
+#gameover-overlay.active { display: flex; }
+#gameover-modal {
+  background: linear-gradient(135deg, #fff 0%, var(--bg) 100%);
+  border-radius: 28px;
+  padding: 36px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.22);
+  text-align: center;
+  animation: modal-in 0.4s ease;
+}
+#gameover-modal h2 { font-size: 2rem; margin-bottom: 8px; }
+#gameover-stats { margin: 16px 0; font-size: 1rem; line-height: 1.8; }
+#gameover-badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 12px 0; font-size: 1.5rem; }
+
+/* CONFETTI CANVAS */
+#confetti-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 450;
+}
+
+/* LUCKY 777 OVERLAY */
+#lucky777 {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 460;
+  pointer-events: none;
+  overflow: hidden;
+}
+#lucky777.active { display: block; }
+.lucky-seven {
+  position: absolute;
+  font-size: 2.5rem;
+  animation: rain-down 2s linear forwards;
+  opacity: 0;
+}
+
+/* ANIMATIONS */
+@keyframes card-deal {
+  from { transform: translateY(-40px) rotateY(90deg); opacity: 0; }
+  to   { transform: translateY(0) rotateY(0deg); opacity: 1; }
+}
+@keyframes shimmer {
+  from { left: -100%; }
+  to   { left: 150%; }
+}
+@keyframes flip-reveal {
+  0%   { transform: rotateY(90deg); }
+  100% { transform: rotateY(0deg); }
+}
+@keyframes chip-bounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.3); }
+  70%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+@keyframes bounce-scale {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+@keyframes tick-up {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes glow-win {
+  0%,100% { box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+  50%      { box-shadow: 0 0 40px 12px #f48fb1; }
+}
+@keyframes glow-loss {
+  0%,100% { box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+  50%      { box-shadow: 0 0 40px 12px #90caf9; }
+}
+@keyframes glow-push {
+  0%,100% { box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+  50%      { box-shadow: 0 0 40px 12px rgba(200,200,220,0.9); }
+}
+@keyframes modal-in {
+  from { transform: scale(0.85); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pulse {
+  0%,100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+@keyframes rain-down {
+  0%   { top: -10%; opacity: 1; }
+  100% { top: 110%; opacity: 0; }
+}
+@keyframes shuffle-deck {
+  0%,100% { transform: translateX(0); }
+  25%  { transform: translateX(-6px) rotate(-3deg); }
+  75%  { transform: translateX(6px) rotate(3deg); }
+}
+.shuffling { animation: shuffle-deck 0.5s ease 3; }
+
+/* RESPONSIVE */
+@media (max-width: 600px) {
+  .chip { width: 46px; height: 46px; font-size: 0.75rem; }
+  .card { width: 58px; height: 86px; }
+  .card-suit-center { font-size: 1.5rem; }
+  .card-corner { font-size: 0.8rem; }
+  #top-bar { padding: 10px 12px; }
+  .action-btn { padding: 10px 18px; font-size: 0.9rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="top-bar">
+  <div id="balance-display">
+    <span>Balance:</span>
+    <div class="odometer" id="balance-val">$5,000</div>
+  </div>
+  <div id="streak-display">
+    <span id="streak-emoji">🔥</span>
+    <span id="streak-num">0</span>
+    <span style="font-size:0.8rem;font-weight:500">streak</span>
+  </div>
+  <div class="top-btns">
+    <button class="top-btn" onclick="openThemes()">🎨 Themes</button>
+    <button class="top-btn" onclick="openAchievements()">🏆 Badges</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- TABLE FELT -->
+  <div id="table">
+    <div id="deck-indicator">
+      <div class="deck-stack" id="deck-stack-visual"></div>
+      <div id="deck-count">52</div>
+    </div>
+
+    <!-- DEALER -->
+    <div>
+      <div class="hand-label">Dealer <span id="dealer-score-badge" class="score-badge" style="display:none"></span></div>
+      <div class="cards-row" id="dealer-cards"></div>
+    </div>
+
+    <!-- RESULT -->
+    <div id="result-msg"></div>
+
+    <!-- PLAYER -->
+    <div id="player-area">
+      <div id="single-hand">
+        <div class="hand-label">You <span id="player-score-badge" class="score-badge" style="display:none"></span></div>
+        <div class="cards-row" id="player-cards"></div>
+      </div>
+      <div id="split-hands" style="display:none"></div>
+    </div>
+
+    <!-- INSURANCE PROMPT -->
+    <div id="insurance-prompt" style="display:none">
+      <div style="margin-bottom:8px">Dealer shows an Ace — take insurance? (costs $<span id="insurance-cost"></span>)</div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="action-btn" onclick="takeInsurance()">Take Insurance</button>
+        <button class="action-btn secondary" onclick="declineInsurance()">Decline</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BET PANEL -->
+  <div id="bet-panel">
+    <div id="bet-display">
+      <span>Bet:</span>
+      <div id="bet-amount">$0</div>
+    </div>
+    <div class="chips-row" id="chips-row">
+      <div class="chip" data-val="5"   onclick="addBet(5)">$5</div>
+      <div class="chip" data-val="10"  onclick="addBet(10)">$10</div>
+      <div class="chip" data-val="25"  onclick="addBet(25)">$25</div>
+      <div class="chip" data-val="50"  onclick="addBet(50)">$50</div>
+      <div class="chip" data-val="100" onclick="addBet(100)">$100</div>
+      <div class="chip" data-val="500" onclick="addBet(500)">$500</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="action-btn danger" id="clear-bet-btn" onclick="clearBet()">Clear Bet</button>
+      <button class="action-btn" id="deal-btn" onclick="startRound()">Deal</button>
+    </div>
+  </div>
+
+  <!-- ACTION BUTTONS -->
+  <div id="action-btns" style="display:none">
+    <button class="action-btn" id="btn-hit"       onclick="hit()">Hit</button>
+    <button class="action-btn secondary" id="btn-stand"    onclick="stand()">Stand</button>
+    <button class="action-btn" id="btn-double"    onclick="doubleDown()">Double Down</button>
+    <button class="action-btn" id="btn-split"     onclick="split()">Split</button>
+    <button class="action-btn" id="btn-new-round" onclick="newRound()" style="display:none">New Round</button>
+  </div>
+
+</div>
+
+<!-- HISTORY BAR -->
+<div id="history-bar" class="collapsed">
+  <button id="history-toggle" onclick="toggleHistory()">▲ Round History</button>
+  <div id="history-content"></div>
+</div>
+
+<!-- THEME MODAL -->
+<div class="modal-overlay" id="theme-modal">
+  <div class="modal">
+    <h2>🎨 Table Themes <button class="modal-close" onclick="closeModal('theme-modal')">×</button></h2>
+    <div class="theme-grid" id="theme-grid"></div>
+  </div>
+</div>
+
+<!-- ACHIEVEMENTS MODAL -->
+<div class="modal-overlay" id="achievements-modal">
+  <div class="modal">
+    <h2>🏆 Achievement Badges <button class="modal-close" onclick="closeModal('achievements-modal')">×</button></h2>
+    <div class="achievements-grid" id="achievements-grid"></div>
+  </div>
+</div>
+
+<!-- BADGE POP-UP -->
+<div id="badge-popup">
+  <div id="badge-popup-icon"></div>
+  <div>
+    <div id="badge-popup-text"></div>
+    <div id="badge-popup-sub"></div>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div id="gameover-overlay">
+  <div id="gameover-modal">
+    <h2>Game Over 💫</h2>
+    <p style="color:#888">You ran out of chips!</p>
+    <div id="gameover-stats"></div>
+    <div id="gameover-badges"></div>
+    <button class="action-btn" style="margin-top:12px" onclick="playAgain()">Play Again</button>
+  </div>
+</div>
+
+<!-- CONFETTI CANVAS -->
+<canvas id="confetti-canvas"></canvas>
+
+<!-- LUCKY 777 -->
+<div id="lucky777"></div>
+
+<script>
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+const THEMES = [
+  { id:'default',  name:'Pink & Blue',   unlock:0,     felt:'#e8eaf6', bg:'#fce4ec', accent1:'#f48fb1', accent2:'#90caf9' },
+  { id:'lavender', name:'Lavender',      unlock:7500,  felt:'#e1bee7', bg:'#f3e5f5', accent1:'#ce93d8', accent2:'#ab47bc' },
+  { id:'rosegold', name:'Rose Gold',     unlock:10000, felt:'#ffccbc', bg:'#fbe9e7', accent1:'#ffab91', accent2:'#ff8a65' },
+  { id:'mint',     name:'Mint Green',    unlock:15000, felt:'#c8e6c9', bg:'#f1f8e9', accent1:'#a5d6a7', accent2:'#81c784' },
+  { id:'coral',    name:'Sunset Coral',  unlock:20000, felt:'#ffccbc', bg:'#fff3e0', accent1:'#ff8a65', accent2:'#ffb74d' },
+  { id:'midnight', name:'Midnight Blue', unlock:25000, felt:'#1a237e', bg:'#0d0d2b', accent1:'#5c6bc0', accent2:'#3949ab' },
+];
+
+const ACHIEVEMENTS = [
+  { id:'first_bj',  name:'First Blackjack', icon:'🃏', desc:'Get a natural blackjack' },
+  { id:'on_fire',   name:'On Fire',         icon:'🔥', desc:'Win 5 hands in a row' },
+  { id:'big_spend', name:'Big Spender',     icon:'💸', desc:'Place a $1,000+ bet' },
+  { id:'high_roll', name:'High Roller',     icon:'💎', desc:'Reach $10,000 balance' },
+  { id:'comeback',  name:'Comeback Kid',    icon:'🦋', desc:'Win with balance under $100' },
+  { id:'lucky777',  name:'Lucky Sevens',    icon:'7️⃣', desc:'Hit Lucky 7-7-7' },
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let deck = [];
+let playerHands = [[]];
+let currentHandIdx = 0;
+let dealerHand = [];
+let bet = 0;
+let handBets = [0];
+let balance = 0;
+let gameState = 'betting'; // betting | playerTurn | dealerTurn | roundOver | gameOver
+let streak = 0;
+let bestStreak = 0;
+let history = [];
+let insuranceBet = 0;
+let activeTheme = 'default';
+let unlockedThemes = ['default'];
+let earnedAchievements = [];
+let isFirstAction = true;
+let isSplit = false;
+let splitComplete = [false];
+
+// ─── PERSISTENCE ──────────────────────────────────────────────────────────────
+function saveState() {
+  localStorage.setItem('bj_balance', balance);
+  localStorage.setItem('bj_themes_unlocked', JSON.stringify(unlockedThemes));
+  localStorage.setItem('bj_active_theme', activeTheme);
+  localStorage.setItem('bj_achievements', JSON.stringify(earnedAchievements));
+  localStorage.setItem('bj_best_streak', bestStreak);
+}
+
+function loadState() {
+  const b = localStorage.getItem('bj_balance');
+  balance = b !== null ? parseInt(b) : 5000;
+  const tu = localStorage.getItem('bj_themes_unlocked');
+  unlockedThemes = tu ? JSON.parse(tu) : ['default'];
+  activeTheme = localStorage.getItem('bj_active_theme') || 'default';
+  const ach = localStorage.getItem('bj_achievements');
+  earnedAchievements = ach ? JSON.parse(ach) : [];
+  bestStreak = parseInt(localStorage.getItem('bj_best_streak') || '0');
+}
+
+// ─── DECK ─────────────────────────────────────────────────────────────────────
+const SUITS = ['♥','♦','♠','♣'];
+const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+function createDeck() {
+  const d = [];
+  for (const s of SUITS) for (const r of RANKS) d.push({ rank: r, suit: s });
+  return d;
+}
+
+function shuffle(d) {
+  for (let i = d.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [d[i], d[j]] = [d[j], d[i]];
+  }
+  return d;
+}
+
+function dealCard() {
+  if (deck.length < 15) reshuffleDeck();
+  return deck.pop();
+}
+
+function reshuffleDeck() {
+  const visual = document.getElementById('deck-stack-visual');
+  visual.classList.add('shuffling');
+  setTimeout(() => visual.classList.remove('shuffling'), 1500);
+  deck = shuffle(createDeck());
+  updateDeckCount();
+}
+
+function cardValue(rank) {
+  if (rank === 'A') return 11;
+  if (['J','Q','K'].includes(rank)) return 10;
+  return parseInt(rank);
+}
+
+function handValue(hand) {
+  let total = 0, aces = 0;
+  for (const c of hand) {
+    total += cardValue(c.rank);
+    if (c.rank === 'A') aces++;
+  }
+  while (total > 21 && aces > 0) { total -= 10; aces--; }
+  return total;
+}
+
+function isSoftHand(hand) {
+  let total = 0, aces = 0;
+  for (const c of hand) {
+    total += cardValue(c.rank);
+    if (c.rank === 'A') aces++;
+  }
+  return aces > 0 && total <= 21 && (total - 10) !== handValue(hand);
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function fmt(n) { return '$' + n.toLocaleString(); }
+
+function updateBalanceDisplay() {
+  const el = document.getElementById('balance-val');
+  el.textContent = fmt(balance);
+}
+
+function updateDeckCount() {
+  document.getElementById('deck-count').textContent = deck.length;
+}
+
+function setGameState(state) {
+  gameState = state;
+  const betPanel = document.getElementById('bet-panel');
+  const actionBtns = document.getElementById('action-btns');
+  const btnNewRound = document.getElementById('btn-new-round');
+  const btnHit = document.getElementById('btn-hit');
+  const btnStand = document.getElementById('btn-stand');
+  const btnDouble = document.getElementById('btn-double');
+  const btnSplit = document.getElementById('btn-split');
+
+  if (state === 'betting') {
+    betPanel.style.display = '';
+    actionBtns.style.display = 'none';
+    document.getElementById('insurance-prompt').style.display = 'none';
+    updateChips();
+  } else if (state === 'insurance') {
+    betPanel.style.display = 'none';
+    actionBtns.style.display = 'none';
+  } else if (state === 'playerTurn') {
+    betPanel.style.display = 'none';
+    actionBtns.style.display = '';
+    btnNewRound.style.display = 'none';
+    document.getElementById('insurance-prompt').style.display = 'none';
+    // show/hide split and double
+    const hand = playerHands[currentHandIdx];
+    btnDouble.style.display = isFirstAction && !isSplit ? '' : (isSplit && isFirstAction ? '' : 'none');
+    const canSplit = isFirstAction && !isSplit && hand.length === 2 && hand[0].rank === hand[1].rank;
+    btnSplit.style.display = canSplit ? '' : 'none';
+    btnHit.style.display = '';
+    btnStand.style.display = '';
+  } else if (state === 'roundOver') {
+    betPanel.style.display = 'none';
+    actionBtns.style.display = '';
+    btnHit.style.display = 'none';
+    btnStand.style.display = 'none';
+    btnDouble.style.display = 'none';
+    btnSplit.style.display = 'none';
+    btnNewRound.style.display = '';
+  }
+}
+
+function updateChips() {
+  document.querySelectorAll('.chip').forEach(chip => {
+    const val = parseInt(chip.dataset.val);
+    chip.classList.toggle('disabled', balance <= 0 || bet + val > balance);
+  });
+}
+
+function makeCardEl(card, faceDown = false) {
+  const el = document.createElement('div');
+  el.className = 'card' + (faceDown ? ' face-down' : '');
+  if (!faceDown) {
+    const isRed = card.suit === '♥' || card.suit === '♦';
+    const colorClass = isRed ? 'red' : 'navy';
+    el.innerHTML = `
+      <div class="card-corner ${colorClass}">${card.rank}<br>${card.suit}</div>
+      <div class="card-suit-center ${colorClass}">${card.suit}</div>
+      <div class="card-corner bottom-right ${colorClass}">${card.rank}<br>${card.suit}</div>`;
+  }
+  return el;
+}
+
+function renderHand(containerId, hand, showScore = true, scoreBadgeId = null) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  hand.forEach(c => container.appendChild(makeCardEl(c)));
+  if (showScore && scoreBadgeId) updateScoreBadge(scoreBadgeId, hand);
+}
+
+function renderDealerHand(revealHole = false) {
+  const container = document.getElementById('dealer-cards');
+  container.innerHTML = '';
+  dealerHand.forEach((c, i) => {
+    if (i === 1 && !revealHole) {
+      container.appendChild(makeCardEl(c, true));
+    } else {
+      container.appendChild(makeCardEl(c));
+    }
+  });
+  if (revealHole) updateScoreBadge('dealer-score-badge', dealerHand);
+}
+
+function updateScoreBadge(id, hand) {
+  const badge = document.getElementById(id);
+  if (!badge) return;
+  const val = handValue(hand);
+  badge.style.display = '';
+  badge.textContent = val;
+  badge.className = 'score-badge';
+  if (val > 21) badge.classList.add('bust');
+  else if (val === 21 && hand.length === 2) badge.classList.add('blackjack');
+}
+
+function showResult(msg) {
+  document.getElementById('result-msg').textContent = msg;
+}
+
+function tableGlow(type) {
+  const t = document.getElementById('table');
+  t.classList.remove('glow-win','glow-loss','glow-push');
+  void t.offsetWidth;
+  t.classList.add('glow-' + type);
+  setTimeout(() => t.classList.remove('glow-win','glow-loss','glow-push'), 900);
+}
+
+// ─── BETTING ──────────────────────────────────────────────────────────────────
+function addBet(val) {
+  if (gameState !== 'betting') return;
+  if (bet + val > balance) val = balance - bet;
+  if (val <= 0) return;
+  bet += val;
+  const el = document.getElementById('bet-amount');
+  el.textContent = fmt(bet);
+  el.classList.remove('tick');
+  void el.offsetWidth;
+  el.classList.add('tick');
+  checkBigSpenderAchievement();
+  updateChips();
+}
+
+function clearBet() {
+  bet = 0;
+  document.getElementById('bet-amount').textContent = '$0';
+  updateChips();
+}
+
+function checkBigSpenderAchievement() {
+  if (bet >= 1000) awardAchievement('big_spend');
+}
+
+// ─── ROUND ────────────────────────────────────────────────────────────────────
+function startRound() {
+  if (gameState !== 'betting') return;
+  if (bet < 5) { showResult('Minimum bet is $5'); return; }
+  if (bet > balance) { showResult('Bet exceeds balance'); return; }
+
+  balance -= bet;
+  handBets = [bet];
+  updateBalanceDisplay();
+  saveState();
+
+  playerHands = [[dealCard(), dealCard()]];
+  currentHandIdx = 0;
+  dealerHand = [dealCard(), dealCard()];
+  isSplit = false;
+  splitComplete = [false];
+  isFirstAction = true;
+  insuranceBet = 0;
+
+  document.getElementById('split-hands').style.display = 'none';
+  document.getElementById('single-hand').style.display = '';
+
+  renderHand('player-cards', playerHands[0], true, 'player-score-badge');
+  renderDealerHand(false);
+  document.getElementById('dealer-score-badge').style.display = 'none';
+  showResult('');
+  updateDeckCount();
+  checkThemeUnlocks();
+
+  // Check insurance
+  if (dealerHand[0].rank === 'A') {
+    document.getElementById('insurance-cost').textContent = Math.floor(bet / 2);
+    document.getElementById('insurance-prompt').style.display = '';
+    setGameState('insurance');
+    return;
+  }
+
+  checkNaturalBlackjack();
+}
+
+function checkNaturalBlackjack() {
+  const pVal = handValue(playerHands[0]);
+  const dVal = handValue(dealerHand);
+
+  if (pVal === 21 && dVal === 21) {
+    revealDealerHole();
+    showResult('Push! Both have Blackjack 🤝');
+    balance += bet;
+    updateBalanceDisplay();
+    finalizeRound('push', bet, 'Player Blackjack vs Dealer Blackjack');
+    return;
+  }
+  if (pVal === 21) {
+    revealDealerHole();
+    const payout = Math.floor(bet * 1.5);
+    balance += bet + payout;
+    updateBalanceDisplay();
+    awardAchievement('first_bj');
+    showResult('Blackjack! 🎉');
+    tableGlow('win');
+    launchConfetti(true);
+    finalizeRound('win', payout, 'Player Blackjack');
+    return;
+  }
+  if (dVal === 21) {
+    revealDealerHole();
+    showResult('Dealer Blackjack 😔');
+    tableGlow('loss');
+    finalizeRound('loss', -bet, 'Dealer Blackjack');
+    return;
+  }
+
+  setGameState('playerTurn');
+}
+
+function takeInsurance() {
+  insuranceBet = Math.floor(bet / 2);
+  if (insuranceBet > balance) insuranceBet = balance;
+  balance -= insuranceBet;
+  updateBalanceDisplay();
+  document.getElementById('insurance-prompt').style.display = 'none';
+  checkNaturalBlackjack();
+}
+
+function declineInsurance() {
+  document.getElementById('insurance-prompt').style.display = 'none';
+  checkNaturalBlackjack();
+}
+
+// ─── PLAYER ACTIONS ───────────────────────────────────────────────────────────
+function hit() {
+  if (gameState !== 'playerTurn') return;
+  isFirstAction = false;
+  const hand = playerHands[currentHandIdx];
+  hand.push(dealCard());
+  renderCurrentHand();
+  const val = handValue(hand);
+  checkLucky777(hand);
+  if (val === 21) { stand(); return; }
+  if (val > 21) {
+    renderCurrentHand();
+    if (!advanceSplitHand()) {
+      revealDealerHole();
+      showResult('Bust! 💥');
+      tableGlow('loss');
+      finalizeRound('loss', -handBets.reduce((a,b)=>a+b,0), 'Player bust');
+    }
+    return;
+  }
+  setGameState('playerTurn');
+}
+
+function stand() {
+  if (gameState !== 'playerTurn') return;
+  if (!advanceSplitHand()) {
+    dealerPlay();
+  }
+}
+
+function doubleDown() {
+  if (gameState !== 'playerTurn' || !isFirstAction) return;
+  const extraBet = Math.min(handBets[currentHandIdx], balance);
+  balance -= extraBet;
+  handBets[currentHandIdx] += extraBet;
+  updateBalanceDisplay();
+  isFirstAction = false;
+  const hand = playerHands[currentHandIdx];
+  hand.push(dealCard());
+  renderCurrentHand();
+  const val = handValue(hand);
+  if (val > 21) {
+    if (!advanceSplitHand()) {
+      revealDealerHole();
+      showResult('Bust! 💥');
+      tableGlow('loss');
+      finalizeRound('loss', -handBets.reduce((a,b)=>a+b,0), 'Player bust');
+    }
+  } else {
+    if (!advanceSplitHand()) dealerPlay();
+  }
+}
+
+function split() {
+  if (gameState !== 'playerTurn' || !isFirstAction || isSplit) return;
+  const hand = playerHands[0];
+  if (hand[0].rank !== hand[1].rank) return;
+  const splitBet = handBets[0];
+  if (balance < splitBet) return;
+  balance -= splitBet;
+  updateBalanceDisplay();
+
+  isSplit = true;
+  playerHands = [[hand[0], dealCard()], [hand[1], dealCard()]];
+  handBets = [splitBet, splitBet];
+  splitComplete = [false, false];
+  currentHandIdx = 0;
+  isFirstAction = true;
+
+  document.getElementById('single-hand').style.display = 'none';
+  renderSplitHands();
+  setGameState('playerTurn');
+}
+
+function advanceSplitHand() {
+  if (!isSplit) return false;
+  splitComplete[currentHandIdx] = true;
+  if (currentHandIdx < playerHands.length - 1) {
+    currentHandIdx++;
+    isFirstAction = true;
+    renderSplitHands();
+    setGameState('playerTurn');
+    return true;
+  }
+  return false;
+}
+
+function renderCurrentHand() {
+  if (isSplit) {
+    renderSplitHands();
+  } else {
+    renderHand('player-cards', playerHands[0], true, 'player-score-badge');
+  }
+  updateDeckCount();
+}
+
+function renderSplitHands() {
+  const container = document.getElementById('split-hands');
+  container.style.display = 'flex';
+  container.innerHTML = '';
+  playerHands.forEach((hand, i) => {
+    const div = document.createElement('div');
+    div.className = 'split-hand' + (i === currentHandIdx ? ' active' : '');
+    div.innerHTML = `<div class="hand-label">Hand ${i+1} (${fmt(handBets[i])}) <span class="score-badge" id="split-score-${i}"></span></div><div class="cards-row" id="split-cards-${i}"></div>`;
+    container.appendChild(div);
+  });
+  playerHands.forEach((hand, i) => {
+    const row = document.getElementById('split-cards-' + i);
+    hand.forEach(c => row.appendChild(makeCardEl(c)));
+    const badge = document.getElementById('split-score-' + i);
+    if (badge) {
+      const val = handValue(hand);
+      badge.textContent = val;
+      badge.style.display = '';
+      badge.className = 'score-badge';
+      if (val > 21) badge.classList.add('bust');
+    }
+  });
+}
+
+// ─── DEALER PLAY ──────────────────────────────────────────────────────────────
+function revealDealerHole() {
+  const holeCard = document.getElementById('dealer-cards')?.children[1];
+  if (holeCard && holeCard.classList.contains('face-down')) {
+    holeCard.classList.remove('face-down');
+    holeCard.classList.add('flip-reveal');
+    const c = dealerHand[1];
+    const isRed = c.suit === '♥' || c.suit === '♦';
+    const colorClass = isRed ? 'red' : 'navy';
+    holeCard.innerHTML = `
+      <div class="card-corner ${colorClass}">${c.rank}<br>${c.suit}</div>
+      <div class="card-suit-center ${colorClass}">${c.suit}</div>
+      <div class="card-corner bottom-right ${colorClass}">${c.rank}<br>${c.suit}</div>`;
+    setTimeout(() => holeCard.classList.remove('flip-reveal'), 700);
+  }
+  updateScoreBadge('dealer-score-badge', dealerHand);
+}
+
+function dealerPlay() {
+  revealDealerHole();
+  setGameState('dealerTurn');
+
+  function dealerStep() {
+    const val = handValue(dealerHand);
+    const soft17 = val === 17 && isSoftHand(dealerHand);
+    if (val < 17 || soft17) {
+      dealerHand.push(dealCard());
+      renderDealerHand(true);
+      setTimeout(dealerStep, 600);
+    } else {
+      resolveRound();
+    }
+  }
+  setTimeout(dealerStep, 700);
+}
+
+// ─── RESOLVE ──────────────────────────────────────────────────────────────────
+function resolveRound() {
+  const dVal = handValue(dealerHand);
+  let totalNet = 0;
+  let messages = [];
+
+  if (isSplit) {
+    playerHands.forEach((hand, i) => {
+      const pVal = handValue(hand);
+      const hb = handBets[i];
+      if (pVal > 21) {
+        messages.push(`Hand ${i+1}: Bust`);
+        totalNet -= hb;
+      } else if (dVal > 21 || pVal > dVal) {
+        balance += hb * 2;
+        totalNet += hb;
+        messages.push(`Hand ${i+1}: Win`);
+      } else if (pVal === dVal) {
+        balance += hb;
+        messages.push(`Hand ${i+1}: Push`);
+      } else {
+        totalNet -= hb;
+        messages.push(`Hand ${i+1}: Loss`);
+      }
+    });
+    updateBalanceDisplay();
+    const allWin = messages.every(m => m.includes('Win'));
+    const allLoss = messages.every(m => m.includes('Loss') || m.includes('Bust'));
+    if (allWin) tableGlow('win');
+    else if (allLoss) tableGlow('loss');
+    else tableGlow('push');
+    showResult(messages.join(' | '));
+    const outcome = allWin ? 'win' : allLoss ? 'loss' : 'push';
+    finalizeRound(outcome, totalNet, messages.join(', '));
+  } else {
+    const pVal = handValue(playerHands[0]);
+    if (pVal > 21) {
+      // already handled
+      return;
+    }
+    let msg, outcome, net;
+    if (dVal > 21) {
+      net = bet; balance += bet * 2; msg = 'Dealer busts — you win! 🎉'; outcome = 'win'; tableGlow('win'); launchConfetti(false);
+    } else if (pVal > dVal) {
+      net = bet; balance += bet * 2; msg = 'You win! 🎉'; outcome = 'win'; tableGlow('win'); launchConfetti(false);
+    } else if (pVal === dVal) {
+      net = 0; balance += bet; msg = 'Push 🤝'; outcome = 'push'; tableGlow('push');
+    } else {
+      net = -bet; msg = 'Dealer wins 😔'; outcome = 'loss'; tableGlow('loss');
+    }
+    // Insurance resolve
+    if (insuranceBet > 0) {
+      if (handValue(dealerHand) === 21 && dealerHand.length === 2) {
+        balance += insuranceBet * 3;
+        msg += ' (Insurance pays!)';
+      }
+    }
+    updateBalanceDisplay();
+    showResult(msg);
+    finalizeRound(outcome, net, msg);
+  }
+}
+
+function finalizeRound(outcome, net, summary) {
+  // Handle insurance for non-blackjack resolve
+  if (insuranceBet > 0 && !(handValue(dealerHand) === 21 && dealerHand.length === 2)) {
+    // insurance bet already deducted, not returned
+  }
+
+  if (outcome === 'win') {
+    streak++;
+    if (streak > bestStreak) bestStreak = streak;
+    if (streak >= 5) awardAchievement('on_fire');
+    checkComebackKid();
+  } else {
+    streak = 0;
+  }
+
+  updateStreakDisplay();
+  addHistory(outcome, net, summary);
+  checkThemeUnlocks();
+  checkHighRollerAchievement();
+  saveState();
+
+  if (balance <= 0) {
+    setTimeout(() => showGameOver(), 1200);
+  } else {
+    setGameState('roundOver');
+  }
+}
+
+function checkComebackKid() {
+  if (balance < 100 + Math.abs(handBets.reduce((a,b)=>a+b,0))) awardAchievement('comeback');
+}
+
+function checkHighRollerAchievement() {
+  if (balance >= 10000) awardAchievement('high_roll');
+}
+
+function checkLucky777(hand) {
+  if (hand.length === 3 && hand.every(c => c.rank === '7')) {
+    awardAchievement('lucky777');
+    triggerLucky777();
+  }
+}
+
+// ─── LUCKY 7-7-7 ──────────────────────────────────────────────────────────────
+function triggerLucky777() {
+  const overlay = document.getElementById('lucky777');
+  overlay.classList.add('active');
+  overlay.innerHTML = '';
+  for (let i = 0; i < 30; i++) {
+    const el = document.createElement('div');
+    el.className = 'lucky-seven';
+    el.textContent = ['7','✨','💛','7','⭐'][Math.floor(Math.random()*5)];
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.animationDelay = Math.random() * 1.5 + 's';
+    el.style.fontSize = (1.5 + Math.random() * 2) + 'rem';
+    el.style.color = ['#ffd700','#ffeb3b','#fff176','#ffe082','#f9a825'][Math.floor(Math.random()*5)];
+    overlay.appendChild(el);
+  }
+  launchConfetti(true, true);
+  setTimeout(() => { overlay.classList.remove('active'); overlay.innerHTML = ''; }, 3000);
+}
+
+// ─── STREAK ───────────────────────────────────────────────────────────────────
+function updateStreakDisplay() {
+  const num = document.getElementById('streak-num');
+  const disp = document.getElementById('streak-display');
+  num.textContent = streak;
+  num.classList.remove('bounce');
+  void num.offsetWidth;
+  if (streak > 0) num.classList.add('bounce');
+  disp.classList.toggle('hot', streak >= 5);
+  document.getElementById('streak-emoji').textContent = streak >= 5 ? '🔥' : '⭐';
+}
+
+// ─── HISTORY ──────────────────────────────────────────────────────────────────
+function addHistory(outcome, net, summary) {
+  history.unshift({ outcome, net, summary });
+  if (history.length > 20) history.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  const content = document.getElementById('history-content');
+  content.innerHTML = '';
+  history.forEach(h => {
+    const chip = document.createElement('div');
+    chip.className = 'history-chip ' + h.outcome;
+    chip.textContent = h.outcome === 'win' ? '🟢' : h.outcome === 'loss' ? '🔴' : '🟡';
+    const tip = document.createElement('div');
+    tip.className = 'tooltip';
+    const sign = h.net > 0 ? '+' : '';
+    tip.textContent = `${h.outcome.toUpperCase()} ${sign}${fmt(h.net)} | ${h.summary}`;
+    chip.appendChild(tip);
+    content.appendChild(chip);
+  });
+}
+
+function toggleHistory() {
+  const bar = document.getElementById('history-bar');
+  const btn = document.getElementById('history-toggle');
+  bar.classList.toggle('collapsed');
+  btn.textContent = (bar.classList.contains('collapsed') ? '▲' : '▼') + ' Round History';
+}
+
+// ─── NEW ROUND / PLAY AGAIN ───────────────────────────────────────────────────
+function newRound() {
+  bet = 0;
+  document.getElementById('bet-amount').textContent = '$0';
+  playerHands = [[]];
+  currentHandIdx = 0;
+  dealerHand = [];
+  document.getElementById('dealer-cards').innerHTML = '';
+  document.getElementById('player-cards').innerHTML = '';
+  document.getElementById('split-hands').innerHTML = '';
+  document.getElementById('split-hands').style.display = 'none';
+  document.getElementById('single-hand').style.display = '';
+  document.getElementById('dealer-score-badge').style.display = 'none';
+  document.getElementById('player-score-badge').style.display = 'none';
+  showResult('');
+  isSplit = false;
+  isFirstAction = true;
+  setGameState('betting');
+}
+
+function playAgain() {
+  balance = 5000;
+  streak = 0;
+  history = [];
+  bet = 0;
+  updateBalanceDisplay();
+  updateStreakDisplay();
+  renderHistory();
+  saveState();
+  document.getElementById('gameover-overlay').classList.remove('active');
+  newRound();
+}
+
+// ─── GAME OVER ────────────────────────────────────────────────────────────────
+function showGameOver() {
+  const overlay = document.getElementById('gameover-overlay');
+  overlay.classList.add('active');
+  document.getElementById('gameover-stats').innerHTML =
+    `Final Balance: ${fmt(balance)}<br>Best Streak: ${bestStreak}<br>Rounds Played: ${history.length}`;
+  const badgeEl = document.getElementById('gameover-badges');
+  badgeEl.innerHTML = earnedAchievements.map(id => {
+    const a = ACHIEVEMENTS.find(x => x.id === id);
+    return a ? `<span title="${a.name}">${a.icon}</span>` : '';
+  }).join('');
+}
+
+// ─── THEMES ───────────────────────────────────────────────────────────────────
+function applyTheme(id) {
+  const theme = THEMES.find(t => t.id === id);
+  if (!theme) return;
+  activeTheme = id;
+  const root = document.documentElement;
+  root.style.setProperty('--bg', theme.bg);
+  root.style.setProperty('--felt', theme.felt);
+  root.style.setProperty('--accent1', theme.accent1);
+  root.style.setProperty('--accent2', theme.accent2);
+  root.style.setProperty('--btn', theme.accent1);
+  root.style.setProperty('--btn-hover', theme.accent2);
+  root.style.setProperty('--card-border', theme.accent1);
+  saveState();
+}
+
+function checkThemeUnlocks() {
+  THEMES.forEach(t => {
+    if (!unlockedThemes.includes(t.id) && balance >= t.unlock) {
+      unlockedThemes.push(t.id);
+      saveState();
+    }
+  });
+}
+
+function openThemes() {
+  checkThemeUnlocks();
+  const grid = document.getElementById('theme-grid');
+  grid.innerHTML = '';
+  THEMES.forEach(t => {
+    const tile = document.createElement('div');
+    const unlocked = unlockedThemes.includes(t.id);
+    tile.className = 'theme-tile' + (activeTheme === t.id ? ' selected' : '') + (!unlocked ? ' locked' : '');
+    tile.style.background = t.bg;
+    tile.innerHTML = `
+      <div style="width:100%;height:20px;border-radius:6px;background:${t.felt};margin-bottom:6px"></div>
+      <div class="theme-name">${t.name}</div>
+      <div class="theme-unlock">${t.unlock === 0 ? 'Default' : 'Unlock at ' + fmt(t.unlock)}</div>
+      ${!unlocked ? '<div class="lock-icon">🔒</div>' : ''}`;
+    if (unlocked) tile.onclick = () => { applyTheme(t.id); document.querySelectorAll('.theme-tile').forEach(x => x.classList.remove('selected')); tile.classList.add('selected'); };
+    grid.appendChild(tile);
+  });
+  document.getElementById('theme-modal').classList.add('active');
+}
+
+function openAchievements() {
+  const grid = document.getElementById('achievements-grid');
+  grid.innerHTML = '';
+  ACHIEVEMENTS.forEach(a => {
+    const tile = document.createElement('div');
+    const earned = earnedAchievements.includes(a.id);
+    tile.className = 'achievement-tile' + (!earned ? ' locked' : '');
+    tile.innerHTML = `<div class="achievement-icon">${a.icon}</div><div class="achievement-name">${a.name}</div><div class="achievement-desc">${a.desc}</div>`;
+    grid.appendChild(tile);
+  });
+  document.getElementById('achievements-modal').classList.add('active');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+// ─── ACHIEVEMENTS ─────────────────────────────────────────────────────────────
+function awardAchievement(id) {
+  if (earnedAchievements.includes(id)) return;
+  earnedAchievements.push(id);
+  saveState();
+  const a = ACHIEVEMENTS.find(x => x.id === id);
+  if (!a) return;
+  const popup = document.getElementById('badge-popup');
+  document.getElementById('badge-popup-icon').textContent = a.icon;
+  document.getElementById('badge-popup-text').textContent = a.name;
+  document.getElementById('badge-popup-sub').textContent = a.desc;
+  popup.classList.add('show');
+  setTimeout(() => popup.classList.remove('show'), 3500);
+}
+
+// ─── CONFETTI ─────────────────────────────────────────────────────────────────
+function launchConfetti(intense = false, golden = false) {
+  const canvas = document.getElementById('confetti-canvas');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  const particles = [];
+  const colors = golden
+    ? ['#ffd700','#ffeb3b','#fff176','#f9a825','#fffde7']
+    : ['#f48fb1','#90caf9','#ce93d8','#a5d6a7','#fff176'];
+  const count = intense ? 120 : 60;
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * -canvas.height * 0.3,
+      r: 3 + Math.random() * 6,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 4,
+      vy: 2 + Math.random() * 4,
+      alpha: 1,
+      rot: Math.random() * 360,
+      rotV: (Math.random() - 0.5) * 6
+    });
+  }
+  function frame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+    particles.forEach(p => {
+      if (p.alpha <= 0) return;
+      alive = true;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.1;
+      p.rot += p.rotV;
+      if (p.y > canvas.height) p.alpha = 0;
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot * Math.PI / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.r/2, -p.r/2, p.r, p.r * 0.6);
+      ctx.restore();
+    });
+    if (alive) requestAnimationFrame(frame);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function init() {
+  loadState();
+  deck = shuffle(createDeck());
+  updateBalanceDisplay();
+  updateStreakDisplay();
+  updateDeckCount();
+  applyTheme(activeTheme);
+  setGameState('betting');
+
+  if (balance <= 0) {
+    balance = 5000;
+    saveState();
+    updateBalanceDisplay();
+  }
+
+  // Close modals on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', e => { if (e.target === el) el.classList.remove('active'); });
+  });
+}
+
+init();
+</script>
+</body>
+</html>
