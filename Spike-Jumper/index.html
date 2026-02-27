@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Santa's Workshop Dash</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #050510;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: Georgia, serif;
+      overflow: hidden;
+      user-select: none;
+    }
+    canvas {
+      border: 3px solid #880000;
+      border-radius: 10px;
+      box-shadow: 0 0 50px rgba(204,0,0,0.35), 0 0 100px rgba(204,0,0,0.1);
+      display: block;
+    }
+    #hint {
+      margin-top: 10px;
+      color: #555;
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hint">SPACE to jump &nbsp;|&nbsp; Hold longer for higher jumps &nbsp;|&nbsp; Desktop only</div>
+
+<script>
+// ─── CANVAS SETUP ─────────────────────────────────────────────────────────────
+const canvas = document.getElementById('game');
+const ctx    = canvas.getContext('2d');
+canvas.width  = 900;
+canvas.height = 420;
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const FLOOR_Y    = 340;   // top of visible floor
+const SANTA_X    = 140;   // santa fixed x
+const SANTA_W    = 44;
+const SANTA_H    = 64;
+const GRAVITY    = 0.58;
+const INIT_SPEED = 5;
+const MAX_SPEED  = 14;
+const SPEED_INC  = 0.004;
+const SEC_LEN    = 3200;  // pixels per section
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let STATE = 'MENU'; // MENU | PLAYING | DEAD | COSTUME
+let gameSpeed, sectionPx, sectionIdx;
+let gifts, giftAccum;
+let bestScore = parseFloat(localStorage.getItem('swd_best') || '0');
+let selCostume = parseInt(localStorage.getItem('swd_costume') || '0');
+let santa, obstacles, particles = [];
+let bgScroll = 0;
+let obstTimer = 0, obstGap = 110;
+let spaceDown = false;
+let signObj = null; // section transition sign
+let deathTimer = 0;
+let animRaf;
+let lastTs = 0;
+let menuSantaX = 50, menuFrame = 0, menuFrameTimer = 0;
+
+// ─── COSTUMES ─────────────────────────────────────────────────────────────────
+const COSTUMES = [
+  { name:'Classic Santa',   body:'#cc0000', trim:'#fff',    belt:'#111',    hat:'#cc0000', skin:'#fddccc' },
+  { name:'Hawaiian Santa',  body:'#ff7eb3', trim:'#ffe066', belt:'#2e7d32', hat:'#cc0000', skin:'#fddccc' },
+  { name:'Swimsuit Santa',  body:'#1565c0', trim:'#ff8f00', belt:'#ff8f00', hat:'#cc0000', skin:'#fddccc' },
+  { name:'Cowboy Santa',    body:'#6d3b1e', trim:'#daa520', belt:'#6d3b1e', hat:'#6d3b1e', skin:'#fddccc' },
+  { name:'Ninja Santa',     body:'#111',    trim:'#333',    belt:'#cc0000', hat:'#cc0000', skin:'#fddccc' },
+  { name:'Business Santa',  body:'#1a237e', trim:'#b0b0b0', belt:'#b0b0b0', hat:'#cc0000', skin:'#fddccc' },
+];
+
+// ─── SECTIONS ─────────────────────────────────────────────────────────────────
+const SECTIONS = [
+  { name:"Santa's Workshop",     sky0:'#1a0600', sky1:'#2e1000', floor:'#7b3f1a', floorLine:'rgba(0,0,0,0.18)', pat:'wood',  accent:'#ff6b00' },
+  { name:"Mrs. Claus's Kitchen", sky0:'#200a00', sky1:'#381600', floor:'#c9956a', floorLine:'rgba(0,0,0,0.15)', pat:'tile',  accent:'#ffa726' },
+  { name:'Reindeer Stables',     sky0:'#00091a', sky1:'#000d28', floor:'#b0bec5', floorLine:'rgba(0,0,0,0.12)', pat:'snow',  accent:'#80d8ff' },
+];
+
+// ─── OBSTACLE DEFS ────────────────────────────────────────────────────────────
+// { w, h, color, shape }
+const OBS = [
+  [ // Workshop
+    { w:42, h:42, color:'#e53935', shape:'gift'  },
+    { w:48, h:78, color:'#795548', shape:'stack' },
+    { w:52, h:60, color:'#2e7d32', shape:'tree'  },
+    { w:36, h:54, color:'#43a047', shape:'elf'   },
+  ],
+  [ // Kitchen
+    { w:72, h:22, color:'#c8a96e', shape:'wide'  },
+    { w:34, h:72, color:'#6d4c41', shape:'jar'   },
+    { w:58, h:18, color:'#e8ca7a', shape:'wide'  },
+    { w:68, h:28, color:'#cc8855', shape:'wide'  },
+  ],
+  [ // Stables
+    { w:50, h:58, color:'#c8a865', shape:'hay'    },
+    { w:34, h:32, color:'#78909c', shape:'gift'   },
+    { w:44, h:68, color:'#8d6e63', shape:'saddle' },
+    { w:66, h:30, color:'#e0e0e0', shape:'wide'   },
+  ],
+];
+
+// ─── AUDIO ────────────────────────────────────────────────────────────────────
+let aCtx = null;
+let musicTmo = null;
+
+function initAudio() {
+  if (aCtx) return;
+  aCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function note(freq, start, dur, vol=0.09, type='square') {
+  if (!aCtx) return;
+  const osc  = aCtx.createOscillator();
+  const gain = aCtx.createGain();
+  osc.connect(gain); gain.connect(aCtx.destination);
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, start);
+  gain.gain.setValueAtTime(vol, start);
+  gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+  osc.start(start); osc.stop(start + dur + 0.01);
+}
+
+// Jingle Bells melody (Hz, beat-duration pairs)
+const MELODY = [
+  [330,0.5],[330,0.5],[330,1],
+  [330,0.5],[330,0.5],[330,1],
+  [330,0.5],[392,0.25],[261,0.25],[293,0.25],[330,0.75],
+  [349,0.5],[349,0.5],[349,0.5],[349,0.5],
+  [349,0.5],[330,0.5],[330,0.5],[330,0.25],[330,0.25],
+  [330,0.5],[293,0.5],[293,0.5],[330,0.5],
+  [293,2],
+  [392,0.5],[392,0.5],[392,1],
+  [392,0.5],[392,0.5],[392,0.75],[392,0.25],
+  [392,0.5],[330,0.5],[330,0.5],[330,0.25],[330,0.25],
+  [440,0.5],[440,0.5],[392,0.5],[293,0.5],
+  [261,2],
+];
+
+function startMusic() {
+  stopMusic();
+  if (!aCtx) return;
+  const tempo = 0.34;
+  let t = aCtx.currentTime + 0.1;
+  function schedule() {
+    for (const [hz, beats] of MELODY) {
+      note(hz, t, beats * tempo * 0.85, 0.07, 'square');
+      // simple bass
+      note(hz * 0.5, t, beats * tempo * 0.8, 0.04, 'triangle');
+      t += beats * tempo;
+    }
+    const delay = Math.max(0, (t - aCtx.currentTime - 0.05) * 1000);
+    musicTmo = setTimeout(schedule, delay);
+  }
+  schedule();
+}
+
+function stopMusic() {
+  if (musicTmo) { clearTimeout(musicTmo); musicTmo = null; }
+}
+
+function sfx(type) {
+  if (!aCtx) return;
+  const t = aCtx.currentTime;
+  if (type === 'jump') {
+    note(523, t, 0.08, 0.12, 'sine');
+    note(659, t+0.06, 0.07, 0.08, 'sine');
+  } else if (type === 'land') {
+    note(200, t, 0.07, 0.1, 'sine');
+  } else if (type === 'death') {
+    note(440, t,    0.12, 0.14, 'sawtooth');
+    note(330, t+0.1, 0.12, 0.14, 'sawtooth');
+    note(220, t+0.22, 0.3, 0.14, 'sawtooth');
+  } else if (type === 'section') {
+    note(523, t,    0.09, 0.1, 'sine');
+    note(659, t+0.1, 0.09, 0.1, 'sine');
+    note(784, t+0.2, 0.2,  0.1, 'sine');
+  }
+}
+
+// ─── INIT GAME ────────────────────────────────────────────────────────────────
+function initGame() {
+  santa = {
+    y: FLOOR_Y - SANTA_H,
+    vy: 0,
+    onGround: true,
+    frame: 0,
+    frameTimer: 0,
+    dead: false,
+  };
+  obstacles  = [];
+  particles  = [];
+  gameSpeed  = INIT_SPEED;
+  sectionPx  = 0;
+  sectionIdx = 0;
+  gifts      = 0;
+  giftAccum  = 0;
+  bgScroll   = 0;
+  obstTimer  = 0;
+  obstGap    = 110;
+  signObj    = null;
+  deathTimer = 0;
+  STATE = 'PLAYING';
+  startMusic();
+}
+
+// ─── SPAWN OBSTACLE ───────────────────────────────────────────────────────────
+function spawnObs() {
+  const pool = OBS[sectionIdx % 3];
+  const def  = pool[Math.floor(Math.random() * pool.length)];
+  obstacles.push({
+    x: canvas.width + 10,
+    y: FLOOR_Y - def.h,
+    w: def.w,
+    h: def.h,
+    color: def.color,
+    shape: def.shape,
+  });
+}
+
+// ─── PARTICLES ────────────────────────────────────────────────────────────────
+const PCOLS = ['#e53935','#43a047','#fdd835','#1e88e5','#fb8c00','#8e24aa','#fff'];
+function boom() {
+  for (let i = 0; i < 90; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = 2.5 + Math.random() * 7;
+    particles.push({
+      x: SANTA_X + SANTA_W/2,
+      y: santa.y + SANTA_H/2,
+      vx: Math.cos(a)*s, vy: Math.sin(a)*s - 3,
+      color: PCOLS[Math.floor(Math.random()*PCOLS.length)],
+      size:  4 + Math.random()*9,
+      life:  1,
+      decay: 0.014 + Math.random()*0.018,
+      ribbon: Math.random() < 0.3,
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length-1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.22;
+    p.vx *= 0.98;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i,1);
+  }
+}
+
+// ─── DRAWING HELPERS ──────────────────────────────────────────────────────────
+function rr(x,y,w,h,r) {
+  ctx.beginPath();
+  ctx.roundRect(x,y,w,h,r);
+}
+
+function btn(x,y,w,h,label,bg,fg,size=18) {
+  ctx.fillStyle = bg;
+  rr(x,y,w,h,8); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1.5;
+  rr(x,y,w,h,8); ctx.stroke();
+  ctx.fillStyle = fg;
+  ctx.font = `bold ${size}px Georgia`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x+w/2, y+h/2);
+  ctx.textBaseline = 'alphabetic';
+}
+
+function hitBtn(mx,my, x,y,w,h) {
+  return mx>=x && mx<=x+w && my>=y && my<=y+h;
+}
+
+// ─── BACKGROUND DRAWING ───────────────────────────────────────────────────────
+function drawBg() {
+  const sec = SECTIONS[sectionIdx % 3];
+  const g = ctx.createLinearGradient(0,0,0,FLOOR_Y);
+  g.addColorStop(0, sec.sky0); g.addColorStop(1, sec.sky1);
+  ctx.fillStyle = g; ctx.fillRect(0,0,canvas.width,FLOOR_Y);
+
+  const si = sectionIdx % 3;
+  if (si === 0) bgWorkshop();
+  else if (si === 1) bgKitchen();
+  else bgStables();
+}
+
+function bgWorkshop() {
+  // Candy canes
+  const sp = 140, off = bgScroll*0.28 % sp;
+  for (let x = -off-sp; x < canvas.width+sp; x += sp) {
+    ctx.strokeStyle = '#bb0000'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(x+22,20); ctx.lineTo(x+22,90);
+    ctx.arc(x+28,90,6,Math.PI,0); ctx.stroke();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    for (const dy of [35,55,75]) {
+      ctx.beginPath(); ctx.moveTo(x+19,dy); ctx.lineTo(x+25,dy); ctx.stroke();
+    }
+  }
+  // Xmas trees BG
+  const tsp = 240, toff = bgScroll*0.38 % tsp;
+  for (let x = -toff-tsp; x < canvas.width+tsp; x += tsp) {
+    xmasTree(x+100, 310, 48, 70);
+  }
+  // Workbenches
+  const bsp = 340, boff = bgScroll*0.55 % bsp;
+  for (let x = -boff-bsp; x < canvas.width+bsp; x += bsp) {
+    workbench(x+160, 305);
+  }
+}
+
+function bgKitchen() {
+  ctx.fillStyle='rgba(255,90,0,0.04)'; ctx.fillRect(0,0,canvas.width,FLOOR_Y);
+  // Stockings
+  const sp = 190, off = bgScroll*0.22 % sp;
+  for (let x = -off-sp; x < canvas.width+sp; x += sp) stocking(x+70, 25);
+  // Counters
+  const cp = 370, coff = bgScroll*0.5 % cp;
+  for (let x = -coff-cp; x < canvas.width+cp; x += cp) counter(x+150, 285);
+  // Mrs. Claus
+  const mx = (700 - bgScroll*0.08) % (canvas.width+200);
+  mrsClaus(((mx % (canvas.width+200)) + canvas.width+200) % (canvas.width+200) - 100, 285);
+}
+
+function bgStables() {
+  // Stars
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 40; i++) {
+    const sx = ((i*137 - bgScroll*0.08) % canvas.width + canvas.width) % canvas.width;
+    const sy = (i*71) % (FLOOR_Y*0.55);
+    const r = 0.8 + (i%3)*0.5;
+    ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2); ctx.fill();
+  }
+  // Icicles
+  const isp = 65, ioff = bgScroll*0.28 % isp;
+  ctx.fillStyle = '#a8d8ea';
+  for (let x = -ioff-isp; x < canvas.width+isp; x += isp) {
+    const h = 18 + ((x*11)%22);
+    ctx.beginPath(); ctx.moveTo(x+5,0); ctx.lineTo(x+10,h); ctx.lineTo(x+15,0); ctx.fill();
+  }
+  // Stalls
+  const ssp = 290, soff = bgScroll*0.48 % ssp;
+  for (let x = -soff-ssp; x < canvas.width+ssp; x += ssp) reindeerStall(x+100, 295);
+  // Sleigh
+  sleigh(((600 - bgScroll*0.18) % (canvas.width+300) + canvas.width+300) % (canvas.width+300) - 150, 225);
+}
+
+// BG sub-elements
+function xmasTree(x,y,w,h) {
+  ctx.fillStyle='#1b5e20';
+  [[0,1,0.5,0.5],[0,0.65,0.6,0.3],[0,0.4,0.7,0]].forEach(([y0,y1,ws,wt]) => {
+    ctx.beginPath();
+    ctx.moveTo(x,        y - h + h*wt);
+    ctx.lineTo(x - w*ws, y - h + h*y1);
+    ctx.lineTo(x + w*ws, y - h + h*y1);
+    ctx.fill();
+  });
+  ctx.fillStyle='#5d4037'; ctx.fillRect(x-4,y,8,10);
+  ctx.fillStyle='#ffd54f';
+  ctx.beginPath(); ctx.arc(x,y-h-4,5,0,Math.PI*2); ctx.fill();
+}
+
+function workbench(x,y) {
+  ctx.fillStyle='#6d4c41'; ctx.fillRect(x-50,y-28,100,10);
+  ctx.fillRect(x-44,y-18,8,22); ctx.fillRect(x+36,y-18,8,22);
+  ctx.fillStyle='#e53935'; ctx.fillRect(x-18,y-50,20,22);
+  ctx.fillStyle='#ffd54f'; ctx.fillRect(x-9,y-50,2,22); ctx.fillRect(x-18,y-40,20,2);
+}
+
+function stocking(x,y) {
+  ctx.fillStyle='#cc0000';
+  rr(x,y,24,50,5); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x+10,y+52,14,9,0,0,Math.PI); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.fillRect(x-2,y,28,10);
+}
+
+function counter(x,y) {
+  ctx.fillStyle='#a1887f'; ctx.fillRect(x-60,y-24,120,34);
+  ctx.fillStyle='#bcaaa4'; ctx.fillRect(x-60,y-30,120,9);
+  ctx.fillStyle='#c8a96e';
+  for (let i=0;i<3;i++){ ctx.beginPath(); ctx.arc(x-28+i*25,y-6,9,0,Math.PI*2); ctx.fill(); }
+}
+
+function mrsClaus(x,y) {
+  if (x<-60||x>canvas.width+60) return;
+  ctx.fillStyle='#8b2252'; rr(x-14,y-44,28,44,5); ctx.fill();
+  ctx.fillStyle='#fddccc'; ctx.beginPath(); ctx.arc(x,y-54,14,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#f5f5f5'; ctx.beginPath(); ctx.arc(x,y-67,8,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#444'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(x-7,y-54,5,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x+7,y-54,5,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-2,y-54); ctx.lineTo(x+2,y-54); ctx.stroke();
+  ctx.fillStyle='#c8a96e'; ctx.fillRect(x+14,y-18,28,5);
+  ctx.beginPath(); ctx.arc(x+23,y-24,7,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+33,y-24,7,0,Math.PI*2); ctx.fill();
+}
+
+function reindeerStall(x,y) {
+  ctx.fillStyle='#795548';
+  ctx.fillRect(x-28,y-58,8,62); ctx.fillRect(x+54,y-58,8,62); ctx.fillRect(x-28,y-62,90,8);
+  ctx.fillStyle='#8d6e63';
+  ctx.beginPath(); ctx.ellipse(x+20,y-18,22,13,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x+42,y-26,11,8,0.3,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#6d4c41'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(x+48,y-33); ctx.lineTo(x+53,y-48); ctx.lineTo(x+59,y-43); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+53,y-48); ctx.lineTo(x+47,y-44); ctx.stroke();
+  ctx.fillStyle='#ff1744'; ctx.beginPath(); ctx.arc(x+52,y-23,4,0,Math.PI*2); ctx.fill();
+}
+
+function sleigh(x,y) {
+  if (x<-220||x>canvas.width+220) return;
+  ctx.fillStyle='#cc0000'; rr(x,y,120,48,10); ctx.fill();
+  const gc=['#e53935','#43a047','#1e88e5','#fdd835'];
+  for (let i=0;i<4;i++){
+    ctx.fillStyle=gc[i]; ctx.fillRect(x+10+i*25,y-20,20,24);
+    ctx.fillStyle='#fff'; ctx.fillRect(x+18+i*25,y-20,2,24); ctx.fillRect(x+10+i*25,y-10,20,2);
+  }
+  ctx.strokeStyle='#999'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(x-10,y+48); ctx.lineTo(x+132,y+48); ctx.stroke();
+}
+
+// ─── FLOOR ────────────────────────────────────────────────────────────────────
+function drawFloor() {
+  const sec = SECTIONS[sectionIdx % 3];
+  ctx.fillStyle = sec.floor; ctx.fillRect(0, FLOOR_Y, canvas.width, canvas.height - FLOOR_Y);
+  ctx.strokeStyle = sec.floorLine; ctx.lineWidth = 1;
+
+  if (sec.pat === 'wood') {
+    const pw = 85, off = bgScroll % pw;
+    for (let x = -off; x < canvas.width+pw; x += pw) {
+      ctx.beginPath(); ctx.moveTo(x,FLOOR_Y); ctx.lineTo(x,canvas.height); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(0,FLOOR_Y+14); ctx.lineTo(canvas.width,FLOOR_Y+14); ctx.stroke();
+  } else if (sec.pat === 'tile') {
+    const ts = 48, off = bgScroll % ts;
+    for (let x = -off; x < canvas.width+ts; x += ts) {
+      ctx.beginPath(); ctx.moveTo(x,FLOOR_Y); ctx.lineTo(x,canvas.height); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(0,FLOOR_Y+24); ctx.lineTo(canvas.width,FLOOR_Y+24); ctx.stroke();
+  } else {
+    ctx.fillStyle='#c9d8e4';
+    ctx.beginPath(); ctx.moveTo(0,FLOOR_Y);
+    const bs=38, off=bgScroll%bs;
+    for (let x=-off-bs; x<canvas.width+bs; x+=bs) ctx.arc(x,FLOOR_Y,10,Math.PI,0);
+    ctx.lineTo(canvas.width,canvas.height); ctx.lineTo(0,canvas.height); ctx.fill();
+  }
+}
+
+// ─── SANTA ────────────────────────────────────────────────────────────────────
+function drawSanta(sx, sy, frame, onGround, dead, costumeIdx) {
+  const c = COSTUMES[costumeIdx];
+  const cy = sy + SANTA_H; // pivot at feet
+  ctx.save();
+  ctx.translate(sx + SANTA_W/2, cy);
+
+  const leg = onGround ? Math.sin(frame*0.28)*0.3 : 0;
+  const arm = onGround ? Math.sin(frame*0.28+Math.PI)*0.22 : -0.38;
+
+  // Legs
+  [[-9, -leg],[9, leg]].forEach(([lx, angle]) => {
+    ctx.save(); ctx.translate(lx, -14); ctx.rotate(angle);
+    ctx.fillStyle = c.body; ctx.fillRect(-5,0,10,18);
+    ctx.fillStyle = '#111';  ctx.fillRect(-5,14,12,7);
+    ctx.restore();
+  });
+
+  // Body
+  ctx.fillStyle = c.body;
+  rr(-SANTA_W/2+3, -SANTA_H+16, SANTA_W-6, SANTA_H-26, 5); ctx.fill();
+
+  // Belt
+  ctx.fillStyle = c.belt; ctx.fillRect(-SANTA_W/2+3, -SANTA_H+38, SANTA_W-6, 7);
+  if (c.belt !== c.body) {
+    ctx.fillStyle='#ffd54f'; ctx.fillRect(-5,-SANTA_H+39,10,5);
+  }
+
+  // Trim (jacket bottom)
+  ctx.fillStyle = c.trim; ctx.fillRect(-SANTA_W/2+3, -SANTA_H+47, SANTA_W-6, 6);
+
+  // Arms
+  [[-SANTA_W/2+3, arm],[SANTA_W/2-3, -arm]].forEach(([ax, angle], i) => {
+    ctx.save(); ctx.translate(ax, -SANTA_H+26); ctx.rotate(angle);
+    const dir = i===0 ? -1 : 1;
+    ctx.fillStyle = c.body; ctx.fillRect(dir*0, 0, dir*12, 7);
+    ctx.fillStyle = c.skin; ctx.fillRect(dir*10, 0, dir*8, 6);
+    ctx.restore();
+  });
+
+  // Head
+  ctx.fillStyle = c.skin; ctx.beginPath(); ctx.arc(0,-SANTA_H+13,15,0,Math.PI*2); ctx.fill();
+
+  // Beard
+  ctx.fillStyle = '#f5f5f5'; ctx.beginPath(); ctx.arc(0,-SANTA_H+17,13,0,Math.PI); ctx.fill();
+
+  // Eyes
+  if (dead) {
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(-5,-SANTA_H+9,2.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 5,-SANTA_H+9,2.5,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#cc0000'; ctx.lineWidth=2;
+    [-5,5].forEach(ex => {
+      ctx.beginPath();
+      ctx.moveTo(ex-2.5,-SANTA_H+6.5); ctx.lineTo(ex+2.5,-SANTA_H+11.5);
+      ctx.moveTo(ex+2.5,-SANTA_H+6.5); ctx.lineTo(ex-2.5,-SANTA_H+11.5);
+      ctx.stroke();
+    });
+  } else {
+    ctx.fillStyle='#333';
+    ctx.beginPath(); ctx.arc(-5,-SANTA_H+9,2.2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 5,-SANTA_H+9,2.2,0,Math.PI*2); ctx.fill();
+  }
+
+  // Nose
+  ctx.fillStyle='#e88870'; ctx.beginPath(); ctx.arc(0,-SANTA_H+13,2.8,0,Math.PI*2); ctx.fill();
+
+  // Hat
+  const hatColor = c.hat;
+  if (costumeIdx === 3) {
+    // Cowboy hat
+    ctx.fillStyle=c.body; ctx.fillRect(-19,-SANTA_H-4,38,7);
+    rr(-13,-SANTA_H-26,26,24,5); ctx.fill();
+    ctx.fillStyle=c.trim; ctx.fillRect(-19,-SANTA_H-6,38,5);
+  } else if (costumeIdx === 4) {
+    // Ninja headband
+    ctx.fillStyle='#111'; ctx.fillRect(-16,-SANTA_H-2,32,18);
+    ctx.fillStyle=hatColor; ctx.fillRect(-18,-SANTA_H-5,36,8);
+    ctx.fillStyle='#cc0000'; ctx.fillRect(-16,-SANTA_H-1,32,5);
+  } else {
+    const bounce = onGround ? Math.sin(frame*0.28)*3 : 0;
+    ctx.fillStyle = hatColor;
+    ctx.beginPath();
+    ctx.moveTo(-14,-SANTA_H-2); ctx.lineTo(14,-SANTA_H-2);
+    ctx.lineTo(7+bounce,-SANTA_H-32+bounce*0.3);
+    ctx.fill();
+    ctx.fillStyle=c.trim;
+    ctx.beginPath(); ctx.ellipse(0,-SANTA_H-2,15,5.5,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(7+bounce,-SANTA_H-32+bounce*0.3,5,0,Math.PI*2); ctx.fill();
+  }
+
+  // Extras per costume
+  if (costumeIdx===1) {
+    // Lei
+    const lc=['#ff69b4','#ffe066','#66bb6a','#ff7043'];
+    for (let i=0;i<8;i++){
+      ctx.fillStyle=lc[i%4];
+      ctx.beginPath(); ctx.arc(-12+i*3.4,-SANTA_H+22,3,0,Math.PI*2); ctx.fill();
+    }
+  } else if (costumeIdx===2) {
+    // Sunglasses
+    ctx.fillStyle='#111';
+    ctx.fillRect(-11,-SANTA_H+8,8,5); ctx.fillRect(3,-SANTA_H+8,8,5);
+    ctx.strokeStyle='#333'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(-3,-SANTA_H+10); ctx.lineTo(3,-SANTA_H+10); ctx.stroke();
+  } else if (costumeIdx===5) {
+    // Tie
+    ctx.fillStyle='#cc0000';
+    ctx.beginPath();
+    ctx.moveTo(-3,-SANTA_H+20); ctx.lineTo(3,-SANTA_H+20);
+    ctx.lineTo(5,-SANTA_H+36); ctx.lineTo(0,-SANTA_H+43);
+    ctx.lineTo(-5,-SANTA_H+36); ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ─── OBSTACLES ────────────────────────────────────────────────────────────────
+function drawObs(o) {
+  ctx.save();
+  const {x,y,w,h,color,shape} = o;
+  switch(shape) {
+    case 'gift':
+      ctx.fillStyle=color; ctx.fillRect(x,y,w,h);
+      ctx.strokeStyle='#ffd54f'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(x+w/2,y); ctx.lineTo(x+w/2,y+h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x,y+h/2); ctx.lineTo(x+w,y+h/2); ctx.stroke();
+      ctx.fillStyle='#ffd54f'; ctx.beginPath(); ctx.arc(x+w/2,y,5,0,Math.PI*2); ctx.fill();
+      break;
+    case 'stack':
+      [[0,0.45,h*0.55,color],[5,0.2,h*0.27,'#e53935'],[10,0,h*0.22,'#fdd835']].forEach(([pad,yFrac,bh,col]) => {
+        ctx.fillStyle=col; ctx.fillRect(x+pad,y+h*yFrac,w-pad*2,bh);
+        ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1;
+        ctx.strokeRect(x+pad,y+h*yFrac,w-pad*2,bh);
+      });
+      break;
+    case 'wide':
+      ctx.fillStyle=color; rr(x,y,w,h,5); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=1;
+      rr(x+2,y+2,w-4,h-4,4); ctx.stroke();
+      break;
+    case 'tree':
+      ctx.fillStyle='#2e7d32';
+      ctx.beginPath();
+      ctx.moveTo(x+w/2,y); ctx.lineTo(x,y+h*0.5); ctx.lineTo(x+w*0.2,y+h*0.5);
+      ctx.lineTo(x+w*0.1,y+h*0.75); ctx.lineTo(x+w*0.35,y+h*0.75);
+      ctx.lineTo(x+w*0.3,y+h); ctx.lineTo(x+w*0.7,y+h);
+      ctx.lineTo(x+w*0.65,y+h*0.75); ctx.lineTo(x+w*0.9,y+h*0.75);
+      ctx.lineTo(x+w*0.8,y+h*0.5); ctx.lineTo(x+w,y+h*0.5);
+      ctx.fill();
+      ctx.fillStyle='#ff1744';
+      [[0.4,0.28],[0.6,0.52],[0.32,0.68]].forEach(([fx,fy]) => {
+        ctx.beginPath(); ctx.arc(x+w*fx,y+h*fy,3,0,Math.PI*2); ctx.fill();
+      });
+      break;
+    case 'elf':
+      ctx.fillStyle='#2e7d32'; ctx.fillRect(x+4,y+h*0.3,w-8,h*0.7);
+      ctx.fillStyle='#fddccc'; ctx.beginPath(); ctx.arc(x+w/2,y+h*0.22,11,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#1b5e20';
+      ctx.beginPath(); ctx.moveTo(x+w/2-10,y+h*0.1); ctx.lineTo(x+w/2+10,y+h*0.1);
+      ctx.lineTo(x+w/2+4,y); ctx.fill();
+      break;
+    case 'jar':
+      ctx.fillStyle=color; rr(x+5,y,w-10,h*0.44,[5,5,0,0]); ctx.fill();
+      ctx.fillStyle='#c8a96e'; rr(x,y+h*0.44,w,h*0.56,[0,0,5,5]); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1;
+      ctx.strokeRect(x,y+h*0.44,w,h*0.56);
+      break;
+    case 'hay':
+      ctx.fillStyle=color; rr(x,y,w,h,8); ctx.fill();
+      ctx.strokeStyle='#b8983a'; ctx.lineWidth=2;
+      [1,2,3].forEach(i => { ctx.beginPath(); ctx.moveTo(x,y+h*i/4); ctx.lineTo(x+w,y+h*i/4); ctx.stroke(); });
+      ctx.strokeStyle='#8B6914'; ctx.lineWidth=3;
+      [0.33,0.66].forEach(f => { ctx.beginPath(); ctx.moveTo(x+w*f,y); ctx.lineTo(x+w*f,y+h); ctx.stroke(); });
+      break;
+    case 'saddle':
+      ctx.fillStyle=color; rr(x,y+h*0.4,w,h*0.6,4); ctx.fill();
+      ctx.fillStyle='#a1887f'; ctx.beginPath(); ctx.ellipse(x+w/2,y+h*0.38,w/2,12,0,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#5d4037'; ctx.lineWidth=2; ctx.strokeRect(x,y+h*0.4,w,h*0.6);
+      break;
+  }
+  ctx.restore();
+}
+
+// ─── HUD ──────────────────────────────────────────────────────────────────────
+function drawHUD() {
+  // Center gifts box
+  ctx.fillStyle='rgba(0,0,0,0.52)'; rr(canvas.width/2-90,10,180,50,10); ctx.fill();
+  ctx.fillStyle='#ffd54f'; ctx.font='bold 12px Georgia'; ctx.textAlign='center';
+  ctx.fillText('GIFTS DELIVERED', canvas.width/2, 27);
+  ctx.fillStyle='#fff'; ctx.font='bold 22px Georgia';
+  ctx.fillText(Math.floor(gifts), canvas.width/2, 52);
+
+  // Best score top-right
+  ctx.fillStyle='rgba(0,0,0,0.42)'; rr(canvas.width-138,10,128,40,8); ctx.fill();
+  ctx.fillStyle='#888'; ctx.font='11px Georgia'; ctx.textAlign='center';
+  ctx.fillText('BEST', canvas.width-74, 26);
+  ctx.fillStyle='#fff'; ctx.font='bold 15px Georgia';
+  ctx.fillText(Math.floor(bestScore), canvas.width-74, 44);
+
+  // Section top-left
+  ctx.fillStyle='rgba(0,0,0,0.42)'; rr(10,10,176,35,8); ctx.fill();
+  ctx.fillStyle='#ddd'; ctx.font='12px Georgia'; ctx.textAlign='left';
+  ctx.fillText(SECTIONS[sectionIdx%3].name, 18, 32);
+}
+
+// ─── SECTION SIGN ─────────────────────────────────────────────────────────────
+function drawSign() {
+  if (!signObj || signObj.alpha <= 0) return;
+  const a = Math.min(signObj.alpha, 1);
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.fillStyle='#5d4037'; rr(canvas.width/2-130,145,260,60,10); ctx.fill();
+  ctx.fillStyle='#c8a96e'; rr(canvas.width/2-125,150,250,50,8);  ctx.fill();
+  ctx.fillStyle='#5d4037'; ctx.fillRect(canvas.width/2-5,205,10,80);
+  ctx.fillStyle='#3e2723'; ctx.font='bold 17px Georgia'; ctx.textAlign='center';
+  ctx.fillText(signObj.name, canvas.width/2, 180);
+  ctx.restore();
+}
+
+// ─── PARTICLES DRAW ───────────────────────────────────────────────────────────
+function drawParticles() {
+  for (const p of particles) {
+    ctx.save(); ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.vx*0.3);
+    if (p.ribbon) ctx.fillRect(-p.size/2,-p.size*2,p.size,p.size*4);
+    else          ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size);
+    ctx.restore(); ctx.restore();
+  }
+}
+
+// ─── MENU ─────────────────────────────────────────────────────────────────────
+function drawMenu() {
+  // Animated background (Workshop)
+  const savedIdx = sectionIdx;
+  sectionIdx = 0;
+  drawBg(); drawFloor();
+  sectionIdx = savedIdx;
+
+  // Animate menu santa
+  menuFrameTimer++;
+  if (menuFrameTimer % 5 === 0) menuFrame++;
+  menuSantaX += 2.2;
+  if (menuSantaX > canvas.width + 80) menuSantaX = -80;
+  drawSanta(menuSantaX, FLOOR_Y - SANTA_H, menuFrame, true, false, selCostume);
+
+  // Panel
+  const pw=520,ph=260,px=canvas.width/2-pw/2,py=65;
+  ctx.fillStyle='rgba(0,0,0,0.76)'; rr(px,py,pw,ph,16); ctx.fill();
+  ctx.strokeStyle='#990000'; ctx.lineWidth=3; rr(px,py,pw,ph,16); ctx.stroke();
+
+  ctx.fillStyle='#ffd54f'; ctx.font='bold 34px Georgia'; ctx.textAlign='center';
+  ctx.fillText("Santa's Workshop Dash", canvas.width/2, py+50);
+
+  ctx.fillStyle='#888'; ctx.font='15px Georgia';
+  ctx.fillText(`Best: ${Math.floor(bestScore)} Gifts Delivered`, canvas.width/2, py+82);
+
+  ctx.fillStyle='#bbb'; ctx.font='13px Georgia';
+  ctx.fillText(`Costume: ${COSTUMES[selCostume].name}`, canvas.width/2, py+110);
+
+  btn(canvas.width/2-110, py+132, 220, 48, 'PLAY', '#cc0000', '#fff', 22);
+  btn(canvas.width/2-110, py+192, 220, 42, 'CHANGE COSTUME', '#5d4037', '#ffd54f', 15);
+}
+
+// ─── COSTUME SCREEN ───────────────────────────────────────────────────────────
+function drawCostumeScreen() {
+  ctx.fillStyle='rgba(8,8,20,0.96)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#ffd54f'; ctx.font='bold 28px Georgia'; ctx.textAlign='center';
+  ctx.fillText('Choose Your Santa', canvas.width/2, 44);
+  ctx.fillStyle='#666'; ctx.font='13px Georgia';
+  ctx.fillText('Click to select', canvas.width/2, 64);
+
+  const cols=3, cw=252, ch=130, gx=15, gy=15;
+  const startX = canvas.width/2 - (cols*cw+(cols-1)*gx)/2;
+  const startY = 80;
+
+  for (let i=0;i<COSTUMES.length;i++) {
+    const col=i%cols, row=Math.floor(i/cols);
+    const cx=startX+col*(cw+gx), cy=startY+row*(ch+gy);
+    const sel=i===selCostume;
+    ctx.fillStyle=sel?'rgba(180,0,0,0.28)':'rgba(255,255,255,0.04)';
+    rr(cx,cy,cw,ch,10); ctx.fill();
+    ctx.strokeStyle=sel?'#cc0000':'rgba(255,255,255,0.1)'; ctx.lineWidth=sel?2.5:1;
+    rr(cx,cy,cw,ch,10); ctx.stroke();
+
+    // Mini santa (scaled)
+    ctx.save();
+    ctx.translate(cx+42, cy+70);
+    ctx.scale(0.65,0.65);
+    ctx.translate(-SANTA_W/2, -SANTA_H/2);
+    drawSanta(0, 0, i*8, true, false, i);
+    ctx.restore();
+
+    ctx.fillStyle=sel?'#ffd54f':'#ccc'; ctx.font=`bold 12px Georgia`; ctx.textAlign='center';
+    ctx.fillText(COSTUMES[i].name, cx+cw/2, cy+ch-14);
+    if (sel) { ctx.fillStyle='#cc0000'; ctx.font='10px Georgia'; ctx.fillText('SELECTED', cx+cw/2, cy+ch-2); }
+  }
+
+  btn(canvas.width/2-80, canvas.height-58, 160, 40, 'BACK', '#2a2a2a', '#fff', 16);
+}
+
+// ─── DEATH SCREEN ─────────────────────────────────────────────────────────────
+function drawDeathScreen() {
+  deathTimer++;
+  // Phase 1: particles flying on top of frozen game
+  if (deathTimer < 100) {
+    const savedIdx=sectionIdx;
+    drawBg(); drawFloor();
+    sectionIdx=savedIdx;
+    for (const o of obstacles) drawObs(o);
+    drawSanta(SANTA_X, santa.y, santa.frame, false, true, selCostume);
+    drawParticles();
+    return;
+  }
+  // Phase 2: overlay + panel
+  ctx.fillStyle='rgba(6,6,18,0.88)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  drawParticles();
+
+  const pw=430,ph=290,px=canvas.width/2-pw/2,py=canvas.height/2-ph/2;
+  ctx.fillStyle='rgba(18,0,0,0.92)'; rr(px,py,pw,ph,15); ctx.fill();
+  ctx.strokeStyle='#cc0000'; ctx.lineWidth=3; rr(px,py,pw,ph,15); ctx.stroke();
+
+  ctx.fillStyle='#cc0000'; ctx.font='bold 34px Georgia'; ctx.textAlign='center';
+  ctx.fillText('Santa Crashed!', canvas.width/2, py+52);
+
+  ctx.fillStyle='#999'; ctx.font='15px Georgia';
+  ctx.fillText('Gifts Delivered', canvas.width/2, py+90);
+  ctx.fillStyle='#ffd54f'; ctx.font='bold 38px Georgia';
+  ctx.fillText(Math.floor(gifts), canvas.width/2, py+132);
+
+  if (gifts > 0 && gifts >= bestScore) {
+    ctx.fillStyle='#ffd54f'; ctx.font='bold 15px Georgia';
+    ctx.fillText('New Record! 🎉', canvas.width/2, py+160);
+  } else {
+    ctx.fillStyle='#666'; ctx.font='14px Georgia';
+    ctx.fillText(`Best: ${Math.floor(bestScore)}`, canvas.width/2, py+160);
+  }
+
+  btn(canvas.width/2-180, py+185, 165, 46, 'TRY AGAIN',  '#cc0000', '#fff');
+  btn(canvas.width/2+15,  py+185, 165, 46, 'MAIN MENU',  '#2a2a2a', '#fff');
+}
+
+// ─── UPDATE ───────────────────────────────────────────────────────────────────
+function update() {
+  if (STATE !== 'PLAYING') { updateParticles(); return; }
+
+  // Jump physics
+  if (santa.onGround && spaceDown) {
+    santa.vy = -13.5;
+    santa.onGround = false;
+    sfx('jump');
+  }
+  if (!santa.onGround) {
+    if (spaceDown && santa.vy < 0) {
+      santa.vy -= 0.32;
+      if (santa.vy < -19) santa.vy = -19;
+    }
+    santa.vy += GRAVITY;
+    santa.y   += santa.vy;
+    if (santa.y >= FLOOR_Y - SANTA_H) {
+      santa.y = FLOOR_Y - SANTA_H;
+      if (!santa.onGround) sfx('land');
+      santa.onGround = true;
+      santa.vy = 0;
+    }
+  }
+
+  // Animate santa
+  santa.frameTimer++;
+  if (santa.frameTimer % 4 === 0) santa.frame++;
+
+  // Speed ramp
+  gameSpeed = Math.min(MAX_SPEED, INIT_SPEED + sectionPx * SPEED_INC);
+
+  // BG scroll
+  bgScroll += gameSpeed;
+
+  // Gifts counter (ticks faster with speed)
+  giftAccum += gameSpeed / INIT_SPEED;
+  if (giftAccum >= 18) { gifts++; giftAccum = 0; }
+
+  // Section progression
+  sectionPx += gameSpeed;
+  if (sectionPx >= SEC_LEN) {
+    sectionPx = 0;
+    sectionIdx++;
+    sfx('section');
+    signObj = { name: SECTIONS[sectionIdx % 3].name, alpha: 2.8 };
+  }
+  if (signObj) signObj.alpha -= 0.014;
+
+  // Obstacle spawning
+  obstTimer++;
+  if (obstTimer >= obstGap) {
+    spawnObs();
+    obstTimer = 0;
+    obstGap = Math.max(38, 108 - (gameSpeed - INIT_SPEED) * 7 + (Math.random() * 36 - 18));
+  }
+
+  // Move + cull obstacles
+  for (let i = obstacles.length-1; i >= 0; i--) {
+    obstacles[i].x -= gameSpeed;
+    if (obstacles[i].x + obstacles[i].w < 0) obstacles.splice(i,1);
+  }
+
+  // Collision
+  for (const o of obstacles) {
+    if (SANTA_X + 6 < o.x + o.w &&
+        SANTA_X + SANTA_W - 6 > o.x &&
+        santa.y + 6 < o.y + o.h &&
+        santa.y + SANTA_H - 4 > o.y) {
+      triggerDeath(); return;
+    }
+  }
+
+  updateParticles();
+}
+
+function triggerDeath() {
+  STATE = 'DEAD';
+  deathTimer = 0;
+  sfx('death');
+  stopMusic();
+  boom();
+  if (gifts > bestScore) {
+    bestScore = gifts;
+    localStorage.setItem('swd_best', Math.floor(bestScore));
+  }
+}
+
+// ─── DRAW ─────────────────────────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if      (STATE === 'MENU')    { drawMenu(); }
+  else if (STATE === 'PLAYING') {
+    drawBg(); drawFloor(); drawSign();
+    for (const o of obstacles) drawObs(o);
+    drawSanta(SANTA_X, santa.y, santa.frame, santa.onGround, false, selCostume);
+    drawParticles(); drawHUD();
+  }
+  else if (STATE === 'DEAD')    { drawDeathScreen(); }
+  else if (STATE === 'COSTUME') { drawCostumeScreen(); }
+}
+
+// ─── GAME LOOP ────────────────────────────────────────────────────────────────
+function loop(ts) {
+  lastTs = ts;
+  update(); draw();
+  animRaf = requestAnimationFrame(loop);
+}
+
+// ─── INPUT ────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space') return;
+  e.preventDefault();
+  spaceDown = true;
+  if (STATE === 'MENU') { initAudio(); initGame(); }
+});
+document.addEventListener('keyup', e => {
+  if (e.code === 'Space') spaceDown = false;
+});
+
+canvas.addEventListener('click', e => {
+  const r  = canvas.getBoundingClientRect();
+  const mx = (e.clientX - r.left) * (canvas.width  / r.width);
+  const my = (e.clientY - r.top)  * (canvas.height / r.height);
+  initAudio();
+
+  if (STATE === 'MENU') {
+    const cx = canvas.width/2;
+    if (hitBtn(mx,my, cx-110, 65+132, 220, 48)) { initGame(); return; }
+    if (hitBtn(mx,my, cx-110, 65+192, 220, 42)) { STATE='COSTUME'; return; }
+  }
+
+  if (STATE === 'COSTUME') {
+    const cols=3, cw=252, ch=130, gx=15, gy=15;
+    const startX=canvas.width/2-(cols*cw+(cols-1)*gx)/2;
+    const startY=80;
+    for (let i=0;i<COSTUMES.length;i++){
+      const col=i%cols, row=Math.floor(i/cols);
+      const cx=startX+col*(cw+gx), cy=startY+row*(ch+gy);
+      if (hitBtn(mx,my,cx,cy,cw,ch)){
+        selCostume=i; localStorage.setItem('swd_costume',i); return;
+      }
+    }
+    if (hitBtn(mx,my, canvas.width/2-80, canvas.height-58, 160,40)) { STATE='MENU'; return; }
+  }
+
+  if (STATE === 'DEAD' && deathTimer >= 100) {
+    const pw=430,ph=290,px=canvas.width/2-pw/2,py=canvas.height/2-ph/2;
+    if (hitBtn(mx,my, canvas.width/2-180, py+185, 165,46)) { initGame(); return; }
+    if (hitBtn(mx,my, canvas.width/2+15,  py+185, 165,46)) { STATE='MENU'; return; }
+  }
+});
+
+// ─── START ────────────────────────────────────────────────────────────────────
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
