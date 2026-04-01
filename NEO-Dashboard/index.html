@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NEO Dashboard — Near-Earth Object Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+:root {
+  --bg: #05050f;
+  --bg2: #0d0d1f;
+  --bg3: #12122a;
+  --border: #1e1e3a;
+  --text: #d0d0e8;
+  --muted: #6060a0;
+  --safe: #22c55e;
+  --watch: #f59e0b;
+  --danger: #ef4444;
+  --accent: #ff6b35;
+  --blue: #60a5fa;
+  --font: 'Courier New', 'Lucida Console', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5; overflow-x: hidden; }
+
+/* LOADING */
+#loading {
+  position: fixed; inset: 0; background: var(--bg); z-index: 9999;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem;
+}
+#starfield { position: absolute; inset: 0; overflow: hidden; }
+.star {
+  position: absolute; background: #fff; border-radius: 50%;
+  animation: twinkle var(--d,2s) ease-in-out infinite alternate;
+}
+@keyframes twinkle { from { opacity: 0.1; } to { opacity: 1; } }
+.loading-text { position: relative; color: var(--accent); font-size: 1.1rem; letter-spacing: 0.15em; text-align: center; }
+.loading-bar { position: relative; width: 260px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.loading-bar-inner { height: 100%; background: var(--accent); border-radius: 2px; animation: loadbar 2s ease-in-out infinite; }
+@keyframes loadbar { 0% { width: 0%; margin-left: 0; } 50% { width: 80%; margin-left: 0; } 100% { width: 0%; margin-left: 100%; } }
+
+/* ERROR */
+#error-state {
+  display: none; position: fixed; inset: 0; background: var(--bg); z-index: 9998;
+  align-items: center; justify-content: center; flex-direction: column; gap: 1rem; text-align: center; padding: 2rem;
+}
+#error-state h2 { color: var(--danger); font-size: 1.4rem; }
+#error-state p { color: var(--muted); max-width: 480px; }
+.btn { background: var(--accent); color: #fff; border: none; padding: 0.6rem 1.4rem; border-radius: 4px; font-family: var(--font); font-size: 0.9rem; cursor: pointer; letter-spacing: 0.08em; transition: opacity 0.2s; }
+.btn:hover { opacity: 0.85; }
+
+/* HEADER */
+header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 1.2rem 2rem; display: flex; align-items: center; gap: 1rem; }
+header h1 { font-size: 1.5rem; color: var(--accent); letter-spacing: 0.2em; text-transform: uppercase; }
+header .subtitle { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.1em; }
+.disclaimer-pill { margin-left: auto; background: var(--bg3); border: 1px solid var(--border); color: var(--muted); font-size: 0.7rem; padding: 0.3rem 0.7rem; border-radius: 20px; cursor: help; }
+
+/* TABS */
+nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; gap: 0; }
+.tab-btn {
+  background: none; border: none; color: var(--muted); font-family: var(--font); font-size: 0.85rem;
+  padding: 0.9rem 1.6rem; cursor: pointer; letter-spacing: 0.1em; text-transform: uppercase;
+  border-bottom: 2px solid transparent; transition: all 0.2s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* PANELS */
+.tab-panel { display: none; padding: 1.5rem 2rem; }
+.tab-panel.active { display: block; }
+
+/* KPI CARDS */
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.kpi-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.3rem;
+  display: flex; flex-direction: column; gap: 0.3rem;
+}
+.kpi-label { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.kpi-value { font-size: 1.6rem; color: var(--accent); font-weight: bold; }
+.kpi-sub { color: var(--muted); font-size: 0.75rem; }
+#countdown { font-size: 1.1rem; color: var(--blue); font-variant-numeric: tabular-nums; }
+
+/* DANGER SUMMARY */
+.section-label { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.7rem; }
+.danger-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.danger-card {
+  flex: 1; min-width: 140px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 1rem 1.3rem; display: flex; align-items: center; gap: 0.9rem;
+}
+.danger-icon { font-size: 1.8rem; }
+.danger-count { font-size: 2rem; font-weight: bold; }
+.danger-name { font-size: 0.78rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+.safe-card .danger-count { color: var(--safe); }
+.watch-card .danger-count { color: var(--watch); }
+.danger-card-red .danger-count { color: var(--danger); }
+
+/* DID YOU KNOW */
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+.panel-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem 1.4rem; }
+.panel-box h3 { color: var(--accent); font-size: 0.8rem; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.8rem; }
+#fact-text { color: var(--text); font-size: 0.95rem; min-height: 3.5rem; transition: opacity 0.4s; }
+.fact-dots { display: flex; gap: 0.4rem; margin-top: 0.7rem; }
+.fact-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: background 0.3s; }
+.fact-dot.active { background: var(--accent); }
+
+/* NEXT 5 */
+.approach-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.approach-row {
+  display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0.9rem;
+  background: var(--bg3); border-radius: 6px; border: 1px solid var(--border);
+  cursor: pointer; transition: border-color 0.2s;
+}
+.approach-row:hover { border-color: var(--accent); }
+.approach-name { color: var(--blue); font-size: 0.82rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.approach-date { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+.approach-dist { color: var(--text); font-size: 0.78rem; white-space: nowrap; }
+.badge { font-size: 0.68rem; padding: 0.2rem 0.5rem; border-radius: 20px; font-weight: bold; letter-spacing: 0.08em; white-space: nowrap; }
+.badge-safe { background: rgba(34,197,94,0.15); color: var(--safe); border: 1px solid var(--safe); }
+.badge-watch { background: rgba(245,158,11,0.15); color: var(--watch); border: 1px solid var(--watch); }
+.badge-danger { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid var(--danger); }
+
+/* DEEP DIVE */
+.toggle-row { display: flex; gap: 0; margin-bottom: 1.5rem; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; width: fit-content; }
+.toggle-btn { background: var(--bg2); border: none; color: var(--muted); font-family: var(--font); font-size: 0.82rem; padding: 0.5rem 1.2rem; cursor: pointer; letter-spacing: 0.08em; transition: all 0.2s; }
+.toggle-btn.active { background: var(--accent); color: #fff; }
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+.chart-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; }
+.chart-box h3 { color: var(--accent); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0.5rem; }
+.chart-note { color: var(--muted); font-size: 0.7rem; margin-bottom: 0.8rem; }
+.chart-wrap { position: relative; height: 240px; }
+#size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.7rem; }
+.size-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 0.8rem; }
+.size-card .s-name { color: var(--blue); font-size: 0.78rem; margin-bottom: 0.3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.size-bar-wrap { background: var(--bg); border-radius: 3px; height: 8px; margin: 0.4rem 0; overflow: hidden; }
+.size-bar { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.5s; }
+.size-label { color: var(--muted); font-size: 0.7rem; }
+#map { height: 380px; border-radius: 8px; border: 1px solid var(--border); }
+
+/* DATA EXPLORER */
+.filter-bar { display: flex; gap: 0.8rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.2rem; }
+.filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
+.filter-group label { color: var(--muted); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.filter-group input, .filter-group select {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+  font-family: var(--font); font-size: 0.82rem; padding: 0.4rem 0.7rem; border-radius: 4px;
+}
+.filter-group input:focus, .filter-group select:focus { outline: none; border-color: var(--accent); }
+.table-wrap { overflow-x: auto; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  background: var(--bg3); color: var(--muted); font-size: 0.72rem; letter-spacing: 0.12em;
+  text-transform: uppercase; padding: 0.7rem 0.9rem; text-align: left; cursor: pointer;
+  border-bottom: 1px solid var(--border); white-space: nowrap; user-select: none;
+}
+th:hover { color: var(--text); }
+th.sorted { color: var(--accent); }
+td { padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+td a { color: var(--blue); text-decoration: none; }
+td a:hover { text-decoration: underline; }
+.pagination { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+.pagination button { background: var(--bg2); border: 1px solid var(--border); color: var(--text); font-family: var(--font); font-size: 0.8rem; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
+.pagination button:hover { border-color: var(--accent); }
+.pagination button:disabled { opacity: 0.3; cursor: default; }
+.page-info { color: var(--muted); font-size: 0.8rem; margin: 0 0.5rem; }
+.table-meta { color: var(--muted); font-size: 0.78rem; margin-bottom: 0.6rem; }
+.glossary-toggle { margin-top: 1.2rem; width: 100%; background: var(--bg2); border: 1px solid var(--border); color: var(--muted); font-family: var(--font); font-size: 0.8rem; padding: 0.6rem; border-radius: 6px; cursor: pointer; text-align: left; letter-spacing: 0.08em; }
+.glossary-toggle:hover { color: var(--text); }
+.glossary-body { display: none; background: var(--bg2); border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px; padding: 1rem 1.2rem; }
+.glossary-body.open { display: block; }
+.glossary-body dl { display: grid; grid-template-columns: auto 1fr; gap: 0.4rem 1.2rem; }
+.glossary-body dt { color: var(--accent); font-size: 0.78rem; }
+.glossary-body dd { color: var(--text); font-size: 0.78rem; }
+
+/* TOOLTIP */
+[data-tip] { cursor: help; text-decoration: underline dotted var(--muted); }
+.tooltip-box {
+  display: none; position: absolute; background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); font-size: 0.75rem; padding: 0.4rem 0.7rem; border-radius: 4px;
+  z-index: 100; max-width: 260px; pointer-events: none;
+}
+
+/* 3D ORRERY */
+#tab-orrery { padding: 0; display: none; flex-direction: column; height: calc(100vh - 100px); }
+#tab-orrery.active { display: flex; }
+.orrery-bar {
+  display: flex; align-items: center; gap: 1rem; padding: 0.7rem 1.4rem;
+  background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap;
+}
+.orrery-bar .section-label { margin: 0; }
+.orrery-bar-right { margin-left: auto; display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+.orrery-legend { display: flex; gap: 1.2rem; flex-wrap: wrap; }
+.orrery-legend span { font-size: 0.75rem; display: flex; align-items: center; gap: 0.3rem; }
+.orrery-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+#three-container { flex: 1; position: relative; background: #02020a; }
+#three-container canvas { display: block; width: 100% !important; height: 100% !important; }
+#ast-tooltip-3d {
+  display: none; position: absolute; pointer-events: none;
+  background: rgba(13,13,31,0.95); border: 1px solid var(--border);
+  color: var(--text); font-size: 0.78rem; padding: 0.6rem 0.9rem;
+  border-radius: 6px; max-width: 240px; z-index: 10; line-height: 1.6;
+}
+#ast-tooltip-3d b { color: var(--accent); }
+.orrery-instructions { color: var(--muted); font-size: 0.72rem; }
+#reset-cam-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--muted); font-family: var(--font); font-size: 0.75rem; padding: 0.3rem 0.8rem; border-radius: 4px; cursor: pointer; }
+#reset-cam-btn:hover { color: var(--text); border-color: var(--accent); }
+
+@media (max-width: 900px) {
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .charts-grid { grid-template-columns: 1fr; }
+  .row2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .tab-panel { padding: 1rem; }
+  header { padding: 1rem; }
+  header h1 { font-size: 1.1rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div id="starfield"></div>
+  <div class="loading-text">Scanning the solar neighborhood&hellip;</div>
+  <div class="loading-bar"><div class="loading-bar-inner"></div></div>
+</div>
+
+<!-- ERROR -->
+<div id="error-state">
+  <h2>&#9888; Signal Lost</h2>
+  <p id="error-msg">Could not reach the NASA NEO database.</p>
+  <p style="color:var(--muted);font-size:0.8rem;max-width:480px;margin-top:0.5rem">
+    The free DEMO_KEY has a 30 req/hour limit. Get a free personal key in seconds at
+    <a href="https://api.nasa.gov/" target="_blank" rel="noopener" style="color:var(--blue)">api.nasa.gov</a>
+    and paste it below.
+  </p>
+  <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+    <input id="api-key-input" type="text" placeholder="Paste NASA API key here"
+      style="background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:0.85rem;padding:0.5rem 0.8rem;border-radius:4px;width:280px" />
+    <button class="btn" onclick="applyApiKey()">Use Key</button>
+  </div>
+  <button class="btn" style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);margin-top:0.3rem" onclick="fetchData()">Retry with current key</button>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <h1>&#9651; NEO Dashboard</h1>
+    <div class="subtitle">Near-Earth Object Tracker &mdash; Live data from NASA JPL</div>
+  </div>
+  <div class="disclaimer-pill" title="Danger tiers are simplified for public communication and do not reflect official NASA Planetary Defense criteria such as the Torino Scale.">
+    &#9432; Simplified threat tiers &mdash; not official NASA PD criteria
+  </div>
+</header>
+
+<!-- TABS -->
+<nav>
+  <button class="tab-btn active" onclick="switchTab('overview', this)">Overview</button>
+  <button class="tab-btn" onclick="switchTab('deepdive', this)">Deep Dive</button>
+  <button class="tab-btn" onclick="switchTab('explorer', this)" id="explorer-tab-btn">Data Explorer</button>
+  <button class="tab-btn" onclick="switchTab('orrery', this)" id="orrery-tab-btn">3D Orrery</button>
+</nav>
+
+<!-- TAB 1: OVERVIEW -->
+<div id="tab-overview" class="tab-panel active">
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Total NEOs in Window</div>
+      <div class="kpi-value" id="kpi-total">—</div>
+      <div class="kpi-sub">objects tracked</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Closest Approach</div>
+      <div class="kpi-value" id="kpi-closest">—</div>
+      <div class="kpi-sub" id="kpi-closest-name"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Fastest Object</div>
+      <div class="kpi-value" id="kpi-fastest">—</div>
+      <div class="kpi-sub">faster than a bullet</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Next Close Approach</div>
+      <div class="kpi-sub" id="kpi-next-name" style="color:var(--blue);margin-bottom:0.2rem;"></div>
+      <div id="countdown">—</div>
+      <div class="kpi-sub" id="kpi-next-date"></div>
+    </div>
+  </div>
+
+  <div class="section-label">Danger Tier Breakdown</div>
+  <div class="danger-row">
+    <div class="danger-card safe-card">
+      <div class="danger-icon">&#128994;</div>
+      <div>
+        <div class="danger-count" id="tier-safe">—</div>
+        <div class="danger-name">Safe <span data-tip="> 0.05 AU — roughly 7.5 million km away">(> 0.05 AU)</span></div>
+      </div>
+    </div>
+    <div class="danger-card watch-card">
+      <div class="danger-icon">&#128993;</div>
+      <div>
+        <div class="danger-count" id="tier-watch">—</div>
+        <div class="danger-name">Watch <span data-tip="0.01–0.05 AU — between 1.5 and 7.5 million km">(0.01–0.05 AU)</span></div>
+      </div>
+    </div>
+    <div class="danger-card danger-card-red">
+      <div class="danger-icon">&#128308;</div>
+      <div>
+        <div class="danger-count" id="tier-danger">—</div>
+        <div class="danger-name">Danger <span data-tip="< 0.01 AU — within ~1.5 million km of Earth">(< 0.01 AU)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="panel-box">
+      <h3>&#10024; Did You Know?</h3>
+      <div id="fact-text"></div>
+      <div class="fact-dots" id="fact-dots"></div>
+    </div>
+    <div class="panel-box">
+      <h3>&#9201; Next 5 Upcoming Approaches</h3>
+      <div class="approach-list" id="next5-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2: DEEP DIVE -->
+<div id="tab-deepdive" class="tab-panel">
+  <div class="toggle-row">
+    <button class="toggle-btn active" onclick="setDeepDiveMode('upcoming', this)">Upcoming</button>
+    <button class="toggle-btn" onclick="setDeepDiveMode('historical', this)">Historical</button>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-box">
+      <h3>Close Approach Distance Over Time</h3>
+      <div class="chart-note">Distance in <span data-tip="Lunar Distance — the average distance from Earth to the Moon, about 384,400 km. Much more intuitive than AU!">Lunar Distances (LD)</span> — lower = closer</div>
+      <div class="chart-wrap"><canvas id="distanceChart"></canvas></div>
+    </div>
+    <div class="chart-box">
+      <h3>Velocity Distribution</h3>
+      <div class="chart-note" id="vel-callout">How fast are these objects moving?</div>
+      <div class="chart-wrap"><canvas id="velChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-box" style="margin-bottom:1rem;">
+    <h3>Size Comparator</h3>
+    <div class="chart-note">Objects with known diameter estimates, compared to familiar landmarks</div>
+    <div id="size-grid"></div>
+  </div>
+
+  <div class="chart-box">
+    <h3>World Map — Flyby Trajectory Viewer</h3>
+    <div class="chart-note" style="margin-bottom:0.6rem;">Illustrative approach arcs only — approximate directions, not true orbital paths. Click an arc for details.</div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<!-- TAB 3: DATA EXPLORER -->
+<div id="tab-explorer" class="tab-panel">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label>Date From</label>
+      <input type="date" id="f-date-min" />
+    </div>
+    <div class="filter-group">
+      <label>Date To</label>
+      <input type="date" id="f-date-max" />
+    </div>
+    <div class="filter-group">
+      <label>Danger Tier</label>
+      <select id="f-tier">
+        <option value="all">All Tiers</option>
+        <option value="safe">Safe</option>
+        <option value="watch">Watch</option>
+        <option value="danger">Danger</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Max Distance (<span data-tip="Astronomical Unit — the average distance from Earth to the Sun, about 150 million km">AU</span>)</label>
+      <input type="number" id="f-dist" placeholder="e.g. 0.2" min="0" max="1" step="0.01" style="width:120px" />
+    </div>
+    <div class="filter-group" style="flex-direction:row;gap:0.5rem;align-items:flex-end;">
+      <button class="btn" onclick="applyFilters()">Apply</button>
+      <button class="btn" style="background:var(--bg3);border:1px solid var(--border);color:var(--muted)" onclick="resetFilters()">Reset</button>
+      <button class="btn" style="background:var(--bg3);border:1px solid var(--safe);color:var(--safe)" onclick="exportCSV()">&#8681; CSV</button>
+    </div>
+  </div>
+
+  <div class="table-meta" id="table-meta">Loading&hellip;</div>
+  <div class="table-wrap">
+    <table id="data-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('fullname')">Object Name <span id="sort-fullname"></span></th>
+          <th onclick="sortTable('cd')">Date <span id="sort-cd"></span></th>
+          <th onclick="sortTable('dist')">Distance (LD / AU) <span id="sort-dist"></span></th>
+          <th onclick="sortTable('v_rel')">Velocity (km/s) <span id="sort-v_rel"></span></th>
+          <th onclick="sortTable('diameter')">Est. Diameter <span id="sort-diameter"></span></th>
+          <th>Danger</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+  <div class="pagination">
+    <button onclick="changePage(-1)" id="prev-btn">&#9664; Prev</button>
+    <span class="page-info" id="page-info"></span>
+    <button onclick="changePage(1)" id="next-btn">Next &#9654;</button>
+  </div>
+
+  <button class="glossary-toggle" onclick="toggleGlossary()">&#9660; Glossary — plain-English definitions</button>
+  <div class="glossary-body" id="glossary-body">
+    <dl>
+      <dt>AU</dt><dd>Astronomical Unit — the average Earth-Sun distance (~150 million km). Used to measure distances in the solar system.</dd>
+      <dt>LD</dt><dd>Lunar Distance — the average Earth-Moon distance (~384,400 km). More intuitive for close approaches.</dd>
+      <dt>v_rel</dt><dd>Relative velocity — how fast the object is moving relative to Earth at closest approach (km/s).</dd>
+      <dt>v_inf</dt><dd>Velocity at infinity — the object's speed far from Earth's gravity well. Represents its true speed through space.</dd>
+      <dt>Absolute Magnitude (H)</dt><dd>A measure of an asteroid's brightness, which relates to its size. Lower H = larger or brighter object.</dd>
+      <dt>Close Approach Date</dt><dd>The date and time when the object passes nearest to Earth.</dd>
+      <dt>Diameter</dt><dd>Estimated physical size of the object in meters. Many objects don't have confirmed diameters — these are estimates from brightness.</dd>
+      <dt>Danger Tier</dt><dd>A simplified public-communication label based on approach distance only. Does not reflect official NASA Planetary Defense risk assessments.</dd>
+    </dl>
+  </div>
+</div>
+
+<!-- TAB 4: 3D ORRERY -->
+<div id="tab-orrery" class="tab-panel">
+  <div class="orrery-bar">
+    <span class="section-label">3D Orrery &mdash; this week&#39;s asteroids at their miss distances &mdash; logarithmic scale</span>
+    <div class="orrery-bar-right">
+      <div class="orrery-legend">
+        <span><span class="orrery-dot" style="background:#22c55e"></span>Safe (&gt; 0.05 AU)</span>
+        <span><span class="orrery-dot" style="background:#f59e0b"></span>Watch (0.01&ndash;0.05 AU)</span>
+        <span><span class="orrery-dot" style="background:#ef4444"></span>Danger (&lt; 0.01 AU)</span>
+        <span><span class="orrery-dot" style="background:#c0c0c0;border:1px solid #888"></span>Moon at 1 LD</span>
+      </div>
+      <span class="orrery-instructions">Drag to rotate &middot; Scroll to zoom &middot; Hover asteroid for details</span>
+      <button id="reset-cam-btn" onclick="resetOrreryCamera()">Reset View</button>
+    </div>
+  </div>
+  <div id="three-container">
+    <div id="ast-tooltip-3d"></div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let allData = [];
+let filteredData = [];
+let currentPage = 1;
+const PAGE_SIZE = 25;
+let sortKey = 'cd';
+let sortDir = 1;
+let deepDiveMode = 'upcoming';
+let countdownTarget = null;
+let countdownTimer = null;
+let distChart = null;
+let velChart = null;
+let leafletMap = null;
+
+const AU_TO_LD = 389.17; // 1 AU ≈ 389.17 lunar distances
+
+const FACTS = [
+  "The asteroid Bennu is about as tall as the Empire State Building — yet it orbits the Sun at over 100,000 km/h.",
+  "Most NEOs burn up in the atmosphere long before reaching the ground. Only the largest survive the fiery descent.",
+  "NASA tracks over 30,000 near-Earth asteroids. New ones are discovered every week.",
+  "The Chicxulub impactor that ended the dinosaurs was roughly 10–15 km wide. Most tracked NEOs are far smaller.",
+  "Asteroid Apophis caused a brief scare in 2004 — early data suggested a 2.7% chance of impact. It will safely pass in 2029.",
+  "Some near-Earth asteroids are actually 'rubble piles' — loose collections of rock held together by gravity, not solid chunks.",
+  "The first asteroid ever discovered was Ceres in 1801. It's so large it's now classified as a dwarf planet.",
+  "If a 140-meter asteroid hit a city, it could cause destruction comparable to a nuclear weapon.",
+  "NASA's DART mission in 2022 successfully changed an asteroid's orbit for the first time in history.",
+  "Near-Earth objects aren't just asteroids — some are dormant comets that have run out of ice.",
+];
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  buildStarfield();
+  initFacts();
+  fetchData();
+});
+
+function buildStarfield() {
+  const sf = document.getElementById('starfield');
+  for (let i = 0; i < 180; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const sz = Math.random() * 2.5 + 0.5;
+    s.style.cssText = `width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--d:${(Math.random()*2+1).toFixed(1)}s;animation-delay:${(Math.random()*2).toFixed(1)}s`;
+    sf.appendChild(s);
+  }
+}
+
+// ─── API ─────────────────────────────────────────────────────────────────────
+// NASA NeoWs API supports CORS; JPL CAD API does not.
+// NeoWs accepts max 7-day windows. We fetch 2 chunks: past 7 days + next 7 days.
+// DEMO_KEY: 30 req/hour, 50 req/day. Get a free key at api.nasa.gov for higher limits.
+let NEOWS_KEY = localStorage.getItem('neo_api_key') || 'swG7iF1l1WBDyv6eB51RIajlSFr25jPdLpMAgnU0';
+
+function applyApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val) return;
+  NEOWS_KEY = val;
+  localStorage.setItem('neo_api_key', val);
+  fetchData();
+}
+
+async function fetchData() {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('error-state').style.display = 'none';
+
+  const fmt = d => d.toISOString().split('T')[0];
+  const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+  const now = new Date();
+
+  // 2 requests: past 7 days + next 7 days (fits well within DEMO_KEY limits)
+  const windows = [
+    [addDays(now, -7), addDays(now, -1)],
+    [now,              addDays(now, 6)],
+  ];
+
+  const dateMin = fmt(windows[0][0]);
+  const dateMax = fmt(windows[windows.length - 1][1]);
+  document.getElementById('f-date-min').value = dateMin;
+  document.getElementById('f-date-max').value = dateMax;
+
+  try {
+    const requests = windows.map(([s, e]) =>
+      fetch(`https://api.nasa.gov/neo/rest/v1/feed?start_date=${fmt(s)}&end_date=${fmt(e)}&api_key=${NEOWS_KEY}`)
+        .then(r => r.json())
+        .then(j => { if (j.error) throw new Error(j.error.message || j.error.code); return j; })
+    );
+    const results = await Promise.all(requests);
+    processData(results);
+    document.getElementById('loading').style.display = 'none';
+  } catch (e) {
+    console.error(e);
+    document.getElementById('loading').style.display = 'none';
+    const errEl = document.getElementById('error-msg');
+    if (errEl && e.message) errEl.textContent = e.message;
+    document.getElementById('error-state').style.display = 'flex';
+  }
+}
+
+// ─── PROCESS ─────────────────────────────────────────────────────────────────
+function processData(results) {
+  const seen = new Set();
+  allData = [];
+
+  for (const json of results) {
+    const neos = json.near_earth_objects || {};
+    for (const date of Object.keys(neos)) {
+      for (const obj of neos[date]) {
+        const ca = (obj.close_approach_data || []).find(c => c.orbiting_body === 'Earth') || obj.close_approach_data?.[0];
+        if (!ca) continue;
+        const key = obj.id + ca.close_approach_date;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const dist_au = parseFloat(ca.miss_distance?.astronomical) || 0;
+        const dMin = obj.estimated_diameter?.meters?.estimated_diameter_min || null;
+        const dMax = obj.estimated_diameter?.meters?.estimated_diameter_max || null;
+        const diameter = dMin !== null && dMax !== null ? (dMin + dMax) / 2 : null;
+
+        allData.push({
+          fullname: obj.name || obj.id,
+          cd: ca.close_approach_date,
+          dist: dist_au,
+          v_rel: parseFloat(ca.relative_velocity?.kilometers_per_second) || 0,
+          v_inf: 0,
+          diameter,
+          h: obj.absolute_magnitude_h || null,
+          jpl_url: obj.nasa_jpl_url || null,
+        });
+      }
+    }
+  }
+
+  // Sort by date ascending
+  allData.sort((a, b) => a.cd.localeCompare(b.cd));
+  filteredData = [...allData];
+  renderOverview();
+  renderDeepDive();
+  renderTable();
+}
+
+// ─── TIER ────────────────────────────────────────────────────────────────────
+function getTier(dist_au) {
+  if (dist_au < 0.01) return 'danger';
+  if (dist_au < 0.05) return 'watch';
+  return 'safe';
+}
+
+function badgeHTML(tier) {
+  const cls = { safe: 'badge-safe', watch: 'badge-watch', danger: 'badge-danger' }[tier];
+  const lbl = tier.charAt(0).toUpperCase() + tier.slice(1);
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+
+// ─── OVERVIEW ────────────────────────────────────────────────────────────────
+function renderOverview() {
+  const total = allData.length;
+  document.getElementById('kpi-total').textContent = total.toLocaleString();
+
+  // Closest
+  const sorted_dist = [...allData].sort((a, b) => a.dist - b.dist);
+  if (sorted_dist.length) {
+    const c = sorted_dist[0];
+    document.getElementById('kpi-closest').textContent = (c.dist * AU_TO_LD).toFixed(2) + ' LD';
+    document.getElementById('kpi-closest-name').textContent = c.fullname;
+  }
+
+  // Fastest
+  const sorted_vel = [...allData].sort((a, b) => b.v_rel - a.v_rel);
+  if (sorted_vel.length) {
+    document.getElementById('kpi-fastest').textContent = sorted_vel[0].v_rel.toFixed(1) + ' km/s';
+  }
+
+  // Next upcoming
+  const now = new Date();
+  const upcoming = allData.filter(d => new Date(d.cd) > now).sort((a, b) => new Date(a.cd) - new Date(b.cd));
+  if (upcoming.length) {
+    const next = upcoming[0];
+    countdownTarget = new Date(next.cd);
+    document.getElementById('kpi-next-name').textContent = next.fullname;
+    document.getElementById('kpi-next-date').textContent = fmtDate(next.cd);
+    startCountdown();
+  }
+
+  // Tiers
+  let safe = 0, watch = 0, danger = 0;
+  allData.forEach(d => {
+    const t = getTier(d.dist);
+    if (t === 'safe') safe++;
+    else if (t === 'watch') watch++;
+    else danger++;
+  });
+  document.getElementById('tier-safe').textContent = safe.toLocaleString();
+  document.getElementById('tier-watch').textContent = watch.toLocaleString();
+  document.getElementById('tier-danger').textContent = danger.toLocaleString();
+
+  // Next 5
+  const list = document.getElementById('next5-list');
+  list.innerHTML = '';
+  upcoming.slice(0, 5).forEach(d => {
+    const tier = getTier(d.dist);
+    const row = document.createElement('div');
+    row.className = 'approach-row';
+    row.innerHTML = `
+      <span class="approach-name" title="${d.fullname}">${d.fullname}</span>
+      <span class="approach-date">${fmtDate(d.cd)}</span>
+      <span class="approach-dist">${(d.dist * AU_TO_LD).toFixed(1)} LD</span>
+      ${badgeHTML(tier)}
+    `;
+    row.onclick = () => {
+      switchTab('explorer', document.getElementById('explorer-tab-btn'));
+      document.getElementById('f-date-min').value = d.cd.substring(0, 10);
+      document.getElementById('f-date-max').value = d.cd.substring(0, 10);
+      applyFilters();
+    };
+    list.appendChild(row);
+  });
+}
+
+function startCountdown() {
+  if (countdownTimer) clearInterval(countdownTimer);
+  updateCountdown();
+  countdownTimer = setInterval(updateCountdown, 1000);
+}
+
+function updateCountdown() {
+  if (!countdownTarget) return;
+  const diff = countdownTarget - new Date();
+  if (diff <= 0) { document.getElementById('countdown').textContent = 'Passing now!'; return; }
+  const d = Math.floor(diff / 86400000);
+  const h = Math.floor((diff % 86400000) / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  document.getElementById('countdown').textContent = `${d}d ${pad(h)}h ${pad(m)}m ${pad(s)}s`;
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function fmtDate(cd) {
+  if (!cd) return '—';
+  return cd.substring(0, 10);
+}
+
+// ─── FACTS ───────────────────────────────────────────────────────────────────
+let factIndex = 0;
+function initFacts() {
+  renderFact();
+  setInterval(() => {
+    factIndex = (factIndex + 1) % FACTS.length;
+    const el = document.getElementById('fact-text');
+    el.style.opacity = 0;
+    setTimeout(() => { renderFact(); el.style.opacity = 1; }, 400);
+  }, 10000);
+}
+
+function renderFact() {
+  document.getElementById('fact-text').textContent = FACTS[factIndex];
+  const dots = document.getElementById('fact-dots');
+  dots.innerHTML = '';
+  FACTS.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'fact-dot' + (i === factIndex ? ' active' : '');
+    d.onclick = () => { factIndex = i; const el = document.getElementById('fact-text'); el.style.opacity = 0; setTimeout(() => { renderFact(); el.style.opacity = 1; }, 200); };
+    dots.appendChild(d);
+  });
+}
+
+// ─── DEEP DIVE ───────────────────────────────────────────────────────────────
+function setDeepDiveMode(mode, btn) {
+  deepDiveMode = mode;
+  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDeepDive();
+}
+
+function renderDeepDive() {
+  const now = new Date();
+  const subset = deepDiveMode === 'upcoming'
+    ? allData.filter(d => new Date(d.cd) >= now).sort((a, b) => new Date(a.cd) - new Date(b.cd))
+    : allData.filter(d => new Date(d.cd) < now).sort((a, b) => new Date(a.cd) - new Date(b.cd));
+
+  renderDistanceChart(subset);
+  renderVelChart(subset);
+  renderSizeComparator(subset);
+  renderMap(subset);
+}
+
+function renderDistanceChart(data) {
+  const ctx = document.getElementById('distanceChart').getContext('2d');
+  if (distChart) distChart.destroy();
+
+  const sample = data.slice(0, 200);
+  const labels = sample.map(d => d.cd.substring(0, 10));
+  const vals = sample.map(d => +(d.dist * AU_TO_LD).toFixed(2));
+  const colors = sample.map(d => {
+    const t = getTier(d.dist);
+    return t === 'danger' ? '#ef4444' : t === 'watch' ? '#f59e0b' : '#22c55e';
+  });
+
+  distChart = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Approach Distance (LD)',
+        data: sample.map((d, i) => ({ x: i, y: vals[i] })),
+        pointBackgroundColor: colors,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: {
+          label: ctx => `${sample[ctx.dataIndex].fullname}: ${ctx.parsed.y} LD`,
+          title: ctx => labels[ctx[0].dataIndex],
+        }
+      }},
+      scales: {
+        x: { ticks: { display: false }, grid: { color: '#1e1e3a' } },
+        y: {
+          title: { display: true, text: 'Lunar Distances (LD)', color: '#6060a0', font: { size: 11 } },
+          grid: { color: '#1e1e3a' },
+          ticks: { color: '#6060a0' },
+          min: 0,
+        }
+      },
+      annotation: {
+        annotations: {
+          dangerLine: { type: 'line', yMin: 0.01 * AU_TO_LD, yMax: 0.01 * AU_TO_LD, borderColor: '#ef4444', borderWidth: 1, borderDash: [5, 5] }
+        }
+      }
+    }
+  });
+}
+
+function renderVelChart(data) {
+  const ctx = document.getElementById('velChart').getContext('2d');
+  if (velChart) velChart.destroy();
+
+  const buckets = [0, 5, 10, 15, 20, 25, 30, 40, 50, 70, 100];
+  const counts = new Array(buckets.length - 1).fill(0);
+  data.forEach(d => {
+    if (!d.v_rel) return;
+    for (let i = 0; i < buckets.length - 1; i++) {
+      if (d.v_rel >= buckets[i] && d.v_rel < buckets[i + 1]) { counts[i]++; break; }
+    }
+  });
+  const labels = buckets.slice(0, -1).map((b, i) => `${b}–${buckets[i+1]}`);
+
+  const peak = counts.indexOf(Math.max(...counts));
+  const doc = document.getElementById('vel-callout');
+  if (peak >= 0) {
+    doc.textContent = `Most objects travel ${buckets[peak]}–${buckets[peak+1]} km/s — that's ${Math.round((buckets[peak]+buckets[peak+1])/2 * 3600 / 1.5)}× faster than a car on the highway.`;
+  }
+
+  velChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Objects', data: counts, backgroundColor: '#ff6b3599', borderColor: '#ff6b35', borderWidth: 1 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6060a0', font: { size: 10 } }, grid: { color: '#1e1e3a' }, title: { display: true, text: 'km/s', color: '#6060a0', font: { size: 11 } } },
+        y: { ticks: { color: '#6060a0' }, grid: { color: '#1e1e3a' }, title: { display: true, text: 'Count', color: '#6060a0', font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function renderSizeComparator(data) {
+  const withSize = data.filter(d => d.diameter !== null && d.diameter > 0).slice(0, 24);
+  const grid = document.getElementById('size-grid');
+  grid.innerHTML = '';
+  if (!withSize.length) { grid.innerHTML = '<div style="color:var(--muted);font-size:0.8rem">No diameter estimates available for this set.</div>'; return; }
+
+  const maxD = Math.max(...withSize.map(d => d.diameter));
+
+  withSize.forEach(d => {
+    const dm = d.diameter;
+    let compare;
+    if (dm < 50) compare = 'a city block';
+    else if (dm < 200) compare = 'the Eiffel Tower';
+    else if (dm < 1000) compare = 'a cruise ship';
+    else compare = 'a mountain';
+
+    const card = document.createElement('div');
+    card.className = 'size-card';
+    const pct = Math.max(5, (dm / maxD) * 100).toFixed(1);
+    card.innerHTML = `
+      <div class="s-name" title="${d.fullname}">${d.fullname}</div>
+      <div class="size-bar-wrap"><div class="size-bar" style="width:${pct}%"></div></div>
+      <div class="size-label">${dm < 1000 ? dm.toFixed(0) + ' m' : (dm/1000).toFixed(2) + ' km'} — about the size of ${compare}</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function renderMap(data) {
+  if (!leafletMap) {
+    leafletMap = L.map('map', { zoomControl: true, attributionControl: true }).setView([20, 0], 2);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      maxZoom: 8,
+    }).addTo(leafletMap);
+  } else {
+    leafletMap.eachLayer(layer => { if (!(layer instanceof L.TileLayer)) leafletMap.removeLayer(layer); });
+  }
+
+  const sample = data.slice(0, 60);
+  sample.forEach((d, i) => {
+    const angle = (i / sample.length) * 360;
+    const rad = angle * Math.PI / 180;
+    const dist = 60 + Math.random() * 30;
+    const endLat = Math.sin(rad) * dist;
+    const endLng = Math.cos(rad) * dist;
+    const tier = getTier(d.dist);
+    const color = tier === 'danger' ? '#ef4444' : tier === 'watch' ? '#f59e0b' : '#22c55e';
+
+    try {
+      const poly = L.polyline([[endLat, endLng], [0, 0]], {
+        color, weight: tier === 'danger' ? 2 : 1, opacity: tier === 'danger' ? 0.9 : 0.5, dashArray: '4 4'
+      }).addTo(leafletMap);
+
+      const ld = (d.dist * AU_TO_LD).toFixed(2);
+      poly.bindPopup(`
+        <b style="color:#ff6b35">${d.fullname}</b><br/>
+        Date: ${fmtDate(d.cd)}<br/>
+        Distance: ${ld} LD (${d.dist.toFixed(4)} AU)<br/>
+        Velocity: ${d.v_rel.toFixed(1)} km/s<br/>
+        Tier: ${tier.charAt(0).toUpperCase() + tier.slice(1)}<br/>
+        <small style="color:#888">Arc direction is illustrative only</small>
+      `);
+    } catch(e) {}
+  });
+}
+
+// ─── TABLE ───────────────────────────────────────────────────────────────────
+function applyFilters() {
+  const dMin = document.getElementById('f-date-min').value;
+  const dMax = document.getElementById('f-date-max').value;
+  const tier = document.getElementById('f-tier').value;
+  const distMax = parseFloat(document.getElementById('f-dist').value) || 999;
+
+  filteredData = allData.filter(d => {
+    const cd = d.cd.substring(0, 10);
+    if (dMin && cd < dMin) return false;
+    if (dMax && cd > dMax) return false;
+    if (tier !== 'all' && getTier(d.dist) !== tier) return false;
+    if (d.dist > distMax) return false;
+    return true;
+  });
+
+  currentPage = 1;
+  renderTable();
+}
+
+function resetFilters() {
+  const now = new Date();
+  const past = new Date(now); past.setFullYear(past.getFullYear() - 1);
+  const future = new Date(now); future.setFullYear(future.getFullYear() + 1);
+  const fmt = d => d.toISOString().split('T')[0];
+  document.getElementById('f-date-min').value = fmt(past);
+  document.getElementById('f-date-max').value = fmt(future);
+  document.getElementById('f-tier').value = 'all';
+  document.getElementById('f-dist').value = '';
+  filteredData = [...allData];
+  currentPage = 1;
+  renderTable();
+}
+
+function sortTable(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = 1; }
+  document.querySelectorAll('[id^="sort-"]').forEach(el => el.textContent = '');
+  const el = document.getElementById('sort-' + key);
+  if (el) el.textContent = sortDir === 1 ? ' ▲' : ' ▼';
+  document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
+  event.currentTarget.classList.add('sorted');
+
+  filteredData.sort((a, b) => {
+    let av = a[key], bv = b[key];
+    if (key === 'cd') return (av < bv ? -1 : av > bv ? 1 : 0) * sortDir;
+    if (key === 'fullname') return av.localeCompare(bv) * sortDir;
+    av = parseFloat(av) || 0; bv = parseFloat(bv) || 0;
+    return (av - bv) * sortDir;
+  });
+  currentPage = 1;
+  renderTable();
+}
+
+function renderTable() {
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page = filteredData.slice(start, start + PAGE_SIZE);
+  const total = filteredData.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  document.getElementById('table-meta').textContent = `${total.toLocaleString()} objects matching filters`;
+  document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages || 1}`;
+  document.getElementById('prev-btn').disabled = currentPage <= 1;
+  document.getElementById('next-btn').disabled = currentPage >= totalPages;
+
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+  page.forEach(d => {
+    const tier = getTier(d.dist);
+    const ld = (d.dist * AU_TO_LD).toFixed(2);
+    const dm = d.diameter !== null ? (d.diameter < 1000 ? d.diameter.toFixed(0) + ' m' : (d.diameter / 1000).toFixed(2) + ' km') : '—';
+    const jplLink = d.jpl_url || `https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=${encodeURIComponent(d.fullname.trim())}`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><a href="${jplLink}" target="_blank" rel="noopener">${d.fullname}</a></td>
+      <td>${fmtDate(d.cd)}</td>
+      <td>${ld} LD / ${d.dist.toFixed(4)} AU</td>
+      <td>${d.v_rel ? d.v_rel.toFixed(2) : '—'}</td>
+      <td>${dm}</td>
+      <td>${badgeHTML(tier)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function changePage(dir) {
+  const total = filteredData.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  currentPage = Math.max(1, Math.min(totalPages, currentPage + dir));
+  renderTable();
+}
+
+function exportCSV() {
+  const headers = ['Name', 'Date', 'Distance_AU', 'Distance_LD', 'Velocity_kms', 'Diameter_m', 'Tier'];
+  const rows = filteredData.map(d => [
+    `"${d.fullname}"`,
+    fmtDate(d.cd),
+    d.dist.toFixed(6),
+    (d.dist * AU_TO_LD).toFixed(4),
+    d.v_rel.toFixed(2),
+    d.diameter !== null ? d.diameter.toFixed(0) : '',
+    getTier(d.dist),
+  ]);
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'neo-dashboard-export.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function toggleGlossary() {
+  const body = document.getElementById('glossary-body');
+  const btn = document.querySelector('.glossary-toggle');
+  body.classList.toggle('open');
+  btn.textContent = body.classList.contains('open')
+    ? '▲ Glossary — plain-English definitions'
+    : '▼ Glossary — plain-English definitions';
+}
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'deepdive' && leafletMap) {
+    setTimeout(() => leafletMap.invalidateSize(), 100);
+  }
+  if (name === 'orrery') {
+    setTimeout(() => {
+      if (!orreryState && allData.length) initOrrery();
+      else if (orreryState) orreryState.renderer.setSize(
+        document.getElementById('three-container').clientWidth,
+        document.getElementById('three-container').clientHeight
+      );
+    }, 60);
+  }
+}
+
+// ─── 3D ORRERY ───────────────────────────────────────────────────────────────
+let orreryState = null;
+
+// Logarithmic scale: Moon (1 LD) maps to 10 scene units
+const LD_SCALE = ld => Math.log(ld + 1) * (10 / Math.log(2));
+
+// Key reference distances in scene units
+const MOON_R    = LD_SCALE(1);                    // 10
+const DANGER_R  = LD_SCALE(0.01 * AU_TO_LD);      // ~0.01 AU in LD
+const WATCH_R   = LD_SCALE(0.05 * AU_TO_LD);      // ~0.05 AU in LD
+
+function makeRing(radius, color, opacity, dashed = false) {
+  const pts = [];
+  const segs = dashed ? 96 : 180;
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
+  return new THREE.LineLoop(geo, mat);
+}
+
+function makeWireframeSphere(radius, color, opacity) {
+  const geo = new THREE.SphereGeometry(radius, 24, 16);
+  const mat = new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity });
+  return new THREE.Mesh(geo, mat);
+}
+
+function randomOnSphere(r) {
+  const u = Math.random(), v = Math.random();
+  const theta = 2 * Math.PI * u;
+  const phi = Math.acos(2 * v - 1);
+  return new THREE.Vector3(
+    r * Math.sin(phi) * Math.cos(theta),
+    r * Math.sin(phi) * Math.sin(theta),
+    r * Math.cos(phi)
+  );
+}
+
+function initOrrery() {
+  const container = document.getElementById('three-container');
+  const W = container.clientWidth || 800;
+  const H = container.clientHeight || 600;
+
+  // Renderer
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x02020a);
+  container.appendChild(renderer.domElement);
+
+  // Scene
+  const scene = new THREE.Scene();
+
+  // Camera
+  const camera = new THREE.PerspectiveCamera(45, W / H, 0.01, 2000);
+  camera.position.set(0, 28, 55);
+
+  // Controls
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.minDistance = 3;
+  controls.maxDistance = 400;
+
+  // ── Lights ──
+  scene.add(new THREE.AmbientLight(0x223355, 1.2));
+  const sun = new THREE.DirectionalLight(0xfff5e0, 2.0);
+  sun.position.set(120, 60, 80);
+  scene.add(sun);
+
+  // ── Stars ──
+  const starPos = [];
+  for (let i = 0; i < 3000; i++) {
+    const p = randomOnSphere(500 + Math.random() * 200);
+    starPos.push(p.x, p.y, p.z);
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, sizeAttenuation: true })));
+
+  // ── Earth ──
+  const earthGeo = new THREE.SphereGeometry(1.5, 48, 32);
+  const earthMat = new THREE.MeshPhongMaterial({
+    color: 0x1a5f9e, emissive: 0x061a30, specular: 0x226699, shininess: 40
+  });
+  const earth = new THREE.Mesh(earthGeo, earthMat);
+  scene.add(earth);
+
+  // Earth atmosphere glow
+  const atmGeo = new THREE.SphereGeometry(1.62, 48, 32);
+  const atmMat = new THREE.MeshPhongMaterial({
+    color: 0x4488ff, transparent: true, opacity: 0.08, side: THREE.BackSide
+  });
+  scene.add(new THREE.Mesh(atmGeo, atmMat));
+
+  // ── Moon ──
+  const moonMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.38, 24, 16),
+    new THREE.MeshPhongMaterial({ color: 0xbbbbbb, emissive: 0x222222 })
+  );
+  moonMesh.position.set(MOON_R, 0, 0);
+  scene.add(moonMesh);
+
+  // Moon orbit ring (silver)
+  scene.add(makeRing(MOON_R, 0x999999, 0.55));
+
+  // Danger threshold shell (red) — 0.01 AU
+  scene.add(makeWireframeSphere(DANGER_R, 0xef4444, 0.05));
+  scene.add(makeRing(DANGER_R, 0xef4444, 0.35));
+
+  // Watch threshold ring (amber) — 0.05 AU
+  scene.add(makeRing(WATCH_R, 0xf59e0b, 0.25));
+
+  // ── Asteroids ──
+  const asteroidMeshes = [];
+  allData.forEach(d => {
+    const ld = d.dist * AU_TO_LD;
+    const r = LD_SCALE(ld);
+    const pos = randomOnSphere(r);
+    const tier = getTier(d.dist);
+    const color = tier === 'danger' ? 0xef4444 : tier === 'watch' ? 0xf59e0b : 0x22c55e;
+
+    // Size: base 0.18, scale slightly by diameter if known
+    let sz = 0.18;
+    if (d.diameter) sz = Math.max(0.14, Math.min(0.45, d.diameter / 800));
+
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(sz, 10, 8),
+      new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 0.25 })
+    );
+    mesh.position.copy(pos);
+    mesh.userData = { neo: d, tier };
+    scene.add(mesh);
+    asteroidMeshes.push(mesh);
+  });
+
+  // ── Labels (canvas sprites) ──
+  function makeLabel(text, color = '#d0d0e8') {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 40;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = color;
+    ctx.font = '18px Courier New';
+    ctx.fillText(text, 4, 28);
+    const tex = new THREE.CanvasTexture(c);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.85 });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(6, 1.1, 1);
+    return sprite;
+  }
+
+  const earthLabel = makeLabel('Earth', '#60a5fa');
+  earthLabel.position.set(0, 2.4, 0);
+  scene.add(earthLabel);
+
+  const moonLabel = makeLabel('Moon · 1 LD', '#c0c0c0');
+  moonLabel.position.set(MOON_R, 1.2, 0);
+  scene.add(moonLabel);
+
+  const dangerLabel = makeLabel('Danger threshold · 0.01 AU', '#ef4444');
+  dangerLabel.position.set(DANGER_R * 0.7, DANGER_R * 0.72, 0);
+  dangerLabel.scale.set(9, 1.3, 1);
+  scene.add(dangerLabel);
+
+  // ── Raycasting / hover ──
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  const tooltip = document.getElementById('ast-tooltip-3d');
+  let hoveredMesh = null;
+
+  renderer.domElement.addEventListener('mousemove', e => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(asteroidMeshes);
+
+    if (hits.length) {
+      const mesh = hits[0].object;
+      if (mesh !== hoveredMesh) {
+        if (hoveredMesh) hoveredMesh.material.emissiveIntensity = 0.25;
+        hoveredMesh = mesh;
+        mesh.material.emissiveIntensity = 0.9;
+      }
+      const d = mesh.userData.neo;
+      const tier = mesh.userData.tier;
+      const ld = (d.dist * AU_TO_LD).toFixed(2);
+      const tierColor = tier === 'danger' ? '#ef4444' : tier === 'watch' ? '#f59e0b' : '#22c55e';
+      tooltip.innerHTML = `
+        <b>${d.fullname}</b><br>
+        Date: ${d.cd}<br>
+        Distance: <span style="color:${tierColor}">${ld} LD</span> (${d.dist.toFixed(4)} AU)<br>
+        Velocity: ${d.v_rel.toFixed(1)} km/s<br>
+        ${d.diameter ? `Est. size: ${d.diameter < 1000 ? d.diameter.toFixed(0) + ' m' : (d.diameter/1000).toFixed(2) + ' km'}<br>` : ''}
+        Tier: <span style="color:${tierColor}">${tier.charAt(0).toUpperCase()+tier.slice(1)}</span>
+      `;
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX - rect.left + 14) + 'px';
+      tooltip.style.top  = (e.clientY - rect.top  - 10) + 'px';
+      renderer.domElement.style.cursor = 'pointer';
+    } else {
+      if (hoveredMesh) { hoveredMesh.material.emissiveIntensity = 0.25; hoveredMesh = null; }
+      tooltip.style.display = 'none';
+      renderer.domElement.style.cursor = 'default';
+    }
+  });
+
+  renderer.domElement.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
+    if (hoveredMesh) { hoveredMesh.material.emissiveIntensity = 0.25; hoveredMesh = null; }
+  });
+
+  // ── Resize ──
+  window.addEventListener('resize', () => {
+    if (!orreryState) return;
+    const W2 = container.clientWidth, H2 = container.clientHeight;
+    camera.aspect = W2 / H2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(W2, H2);
+  });
+
+  // ── Animate ──
+  let frame;
+  function animate() {
+    frame = requestAnimationFrame(animate);
+    earth.rotation.y += 0.0015;
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  orreryState = { renderer, scene, camera, controls, frame,
+    defaultCamPos: camera.position.clone(), defaultTarget: controls.target.clone() };
+}
+
+function resetOrreryCamera() {
+  if (!orreryState) return;
+  const { camera, controls, defaultCamPos, defaultTarget } = orreryState;
+  camera.position.copy(defaultCamPos);
+  controls.target.copy(defaultTarget);
+  controls.update();
+}
+</script>
+</body>
+</html>
