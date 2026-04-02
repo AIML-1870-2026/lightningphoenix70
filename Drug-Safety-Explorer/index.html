@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drug Safety Explorer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #FDF6EE;
+      --surface: #FFFFFF;
+      --primary: #D97B4F;
+      --primary-dark: #c0683c;
+      --secondary: #5B8E8C;
+      --warning: #B45309;
+      --warning-bg: #FEF3C7;
+      --danger: #C0392B;
+      --text: #2D2D2D;
+      --muted: #6B6B6B;
+      --border: #E8DDD0;
+      --d1: #D97B4F;
+      --d2: #5B8E8C;
+      --d3: #8B6DB5;
+      --d4: #D4A017;
+      --radius: 10px;
+      --shadow: 0 2px 12px rgba(0,0,0,0.07);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 1rem; line-height: 1.6; }
+
+    /* ── Disclaimer Banner ── */
+    #disclaimer {
+      position: sticky; top: 0; z-index: 100;
+      background: #FFFBEB; border-bottom: 2px solid #FCD34D;
+      padding: 0.55rem 1.5rem; text-align: center; font-size: 0.88rem;
+    }
+    #disclaimer strong { color: var(--warning); }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 1.25rem 2rem; display: flex; align-items: center; gap: 1rem;
+    }
+    header .logo { font-size: 1.6rem; }
+    header h1 { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    header p { font-size: 0.88rem; color: var(--muted); margin-top: 0.1rem; }
+
+    /* ── Main Content ── */
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
+
+    /* ── Input Zone ── */
+    #input-zone {
+      background: var(--surface); border-radius: var(--radius);
+      border: 1px solid var(--border); padding: 1.75rem; margin-bottom: 2rem;
+      box-shadow: var(--shadow);
+    }
+    #input-zone h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.25rem; color: var(--text); }
+    #slots-container { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+
+    .slot-wrapper { position: relative; flex: 1 1 220px; min-width: 200px; max-width: 280px; }
+    .slot-wrapper input {
+      width: 100%; padding: 0.65rem 2.2rem 0.65rem 0.85rem;
+      border: 1.5px solid var(--border); border-radius: 8px;
+      font-family: inherit; font-size: 0.95rem; background: var(--bg); color: var(--text);
+      transition: border-color 0.2s;
+    }
+    .slot-wrapper input:focus { outline: none; border-color: var(--primary); }
+    .slot-wrapper input.has-value { border-color: var(--secondary); }
+    .remove-slot {
+      position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      font-size: 1.1rem; line-height: 1; padding: 0.2rem;
+      transition: color 0.2s;
+    }
+    .remove-slot:hover { color: var(--danger); }
+    .slot-label {
+      display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.3rem; font-weight: 500;
+    }
+    .drug-color-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px;
+    }
+
+    /* Autocomplete dropdown */
+    .autocomplete-list {
+      position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 200;
+      background: var(--surface); border: 1.5px solid var(--border); border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 220px; overflow-y: auto;
+    }
+    .autocomplete-list.hidden { display: none; }
+    .ac-item {
+      padding: 0.6rem 0.85rem; cursor: pointer; font-size: 0.9rem;
+      border-bottom: 1px solid var(--border); transition: background 0.15s;
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item.active { background: var(--bg); }
+    .ac-brand { font-weight: 600; color: var(--text); }
+    .ac-generic { font-size: 0.8rem; color: var(--muted); }
+
+    /* Slot controls */
+    #slot-controls { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    #add-drug-btn {
+      background: none; border: 1.5px dashed var(--border); border-radius: 8px;
+      padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; font-family: inherit;
+      font-size: 0.9rem; transition: border-color 0.2s, color 0.2s;
+    }
+    #add-drug-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+    #add-drug-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Presets */
+    .presets-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .presets-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; font-weight: 500; }
+    .preset-btn {
+      background: var(--bg); border: 1.5px solid var(--border); border-radius: 20px;
+      padding: 0.4rem 0.9rem; font-size: 0.85rem; cursor: pointer; font-family: inherit;
+      color: var(--text); transition: background 0.2s, border-color 0.2s;
+    }
+    .preset-btn:hover { background: #EEE4D8; border-color: var(--primary); }
+
+    /* Explore button */
+    #explore-btn {
+      background: var(--primary); color: white; border: none; border-radius: 8px;
+      padding: 0.7rem 2rem; font-size: 1rem; font-weight: 600; cursor: pointer;
+      font-family: inherit; transition: background 0.2s, transform 0.1s;
+    }
+    #explore-btn:hover:not(:disabled) { background: var(--primary-dark); }
+    #explore-btn:active { transform: scale(0.98); }
+    #explore-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ── Results ── */
+    #results.hidden { display: none; }
+    .section-header {
+      display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.25rem;
+    }
+    .section-header h2 { font-size: 1.2rem; font-weight: 700; }
+    .results-section { margin-bottom: 2.5rem; }
+
+    /* Cards Grid */
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; }
+
+    /* Drug Summary Card */
+    .drug-card {
+      background: var(--surface); border-radius: var(--radius);
+      border: 1px solid var(--border); padding: 1.25rem;
+      box-shadow: var(--shadow); position: relative; overflow: hidden;
+    }
+    .drug-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    }
+    .drug-card[data-slot="0"]::before { background: var(--d1); }
+    .drug-card[data-slot="1"]::before { background: var(--d2); }
+    .drug-card[data-slot="2"]::before { background: var(--d3); }
+    .drug-card[data-slot="3"]::before { background: var(--d4); }
+    .drug-card .brand-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.15rem; }
+    .drug-card .generic-name { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }
+    .card-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; font-size: 0.88rem; }
+    .card-label { color: var(--muted); }
+    .card-value { font-weight: 500; }
+    .badge {
+      display: inline-block; border-radius: 20px; padding: 0.2rem 0.6rem;
+      font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .badge-rx { background: #E0F2FE; color: #0369A1; }
+    .badge-otc { background: #DCFCE7; color: #166534; }
+    .badge-disc { background: #F3F4F6; color: #6B7280; }
+    .count-row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); font-size: 0.88rem; }
+    .count-big { font-size: 1.1rem; font-weight: 700; color: var(--primary); }
+
+    /* Approval Card */
+    .approval-card {
+      background: var(--surface); border-radius: var(--radius);
+      border: 1px solid var(--border); padding: 1.25rem; box-shadow: var(--shadow);
+    }
+    .approval-card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text); }
+
+    /* Help button */
+    .help-btn {
+      background: none; border: 1.5px solid var(--border); border-radius: 50%;
+      width: 20px; height: 20px; font-size: 0.7rem; cursor: pointer; color: var(--muted);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: inherit; font-weight: 700; flex-shrink: 0;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .help-btn:hover { border-color: var(--secondary); color: var(--secondary); }
+
+    /* ── Charts ── */
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem; }
+    .chart-card {
+      background: var(--surface); border-radius: var(--radius);
+      border: 1px solid var(--border); padding: 1.25rem; box-shadow: var(--shadow);
+    }
+    .chart-card h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.15rem; display: flex; align-items: center; gap: 0.4rem; }
+    .chart-card .chart-drug-name { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.9rem; }
+    .chart-canvas-wrap { position: relative; height: 220px; }
+    .chart-canvas-wrap.tall { height: 280px; }
+
+    /* ── Black Box Warning ── */
+    .black-box {
+      background: #FFF7ED; border-left: 4px solid var(--warning); border-radius: 0 8px 8px 0;
+      padding: 1rem 1.25rem; margin-bottom: 1rem; font-size: 0.88rem;
+    }
+    .black-box .bb-label { font-weight: 700; color: var(--warning); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+    .black-box p { color: var(--text); }
+    .no-bb { font-size: 0.88rem; color: var(--muted); font-style: italic; padding: 0.5rem 0; }
+
+    /* ── Labeling Panel ── */
+    .labeling-card {
+      background: var(--surface); border-radius: var(--radius);
+      border: 1px solid var(--border); padding: 1.25rem; box-shadow: var(--shadow);
+    }
+    .labeling-card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem; }
+    .tab-bar { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid var(--border); }
+    .tab-btn {
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      font-size: 0.85rem; padding: 0.5rem 0.85rem; color: var(--muted); border-bottom: 2px solid transparent;
+      margin-bottom: -2px; transition: color 0.2s, border-color 0.2s;
+    }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .label-text { font-size: 0.85rem; color: var(--text); line-height: 1.65; }
+    .label-text.truncated { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; }
+    .read-more-btn {
+      background: none; border: none; color: var(--secondary); cursor: pointer; font-family: inherit;
+      font-size: 0.82rem; font-weight: 600; padding: 0.25rem 0; display: block; margin-top: 0.3rem;
+    }
+    .not-found { font-size: 0.85rem; color: var(--muted); font-style: italic; }
+
+    /* ── About Data ── */
+    #about-data {
+      background: var(--surface); border-radius: var(--radius);
+      border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 2rem;
+    }
+    #about-data-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.1rem 1.5rem; cursor: pointer; user-select: none;
+    }
+    #about-data-header h2 { font-size: 1rem; font-weight: 600; }
+    #about-data-arrow { font-size: 1rem; color: var(--muted); transition: transform 0.25s; }
+    #about-data-body {
+      padding: 0 1.5rem 1.5rem; display: none;
+    }
+    #about-data-body.open { display: block; }
+    .about-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+    .about-item h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.3rem; color: var(--primary); }
+    .about-item p { font-size: 0.85rem; color: var(--muted); }
+
+    /* ── Loading & Error States ── */
+    .skeleton { background: linear-gradient(90deg, #f0e8df 25%, #e8ddd0 50%, #f0e8df 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .skeleton-card { height: 160px; border-radius: var(--radius); }
+    .error-card {
+      background: #FEF2F2; border: 1px solid #FECACA; border-radius: var(--radius);
+      padding: 1.25rem; color: var(--danger); font-size: 0.9rem;
+    }
+    .error-card h4 { font-weight: 600; margin-bottom: 0.3rem; }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--surface); border-top: 1px solid var(--border);
+      padding: 1.5rem 2rem; font-size: 0.82rem; color: var(--muted);
+      text-align: center; line-height: 1.8;
+    }
+    footer a { color: var(--secondary); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── Info Modal ── */
+    #modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000;
+      display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    #modal-overlay.hidden { display: none; }
+    #modal-box {
+      background: var(--surface); border-radius: var(--radius); padding: 1.75rem;
+      max-width: 440px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+      position: relative;
+    }
+    #modal-box h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text); }
+    #modal-box p { font-size: 0.9rem; color: var(--muted); line-height: 1.65; }
+    #modal-close {
+      position: absolute; top: 1rem; right: 1rem;
+      background: none; border: none; font-size: 1.3rem; cursor: pointer;
+      color: var(--muted); line-height: 1;
+    }
+    #modal-got-it {
+      margin-top: 1.25rem; background: var(--primary); color: white; border: none;
+      border-radius: 7px; padding: 0.55rem 1.25rem; font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+    }
+    #modal-got-it:hover { background: var(--primary-dark); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      main { padding: 1.25rem 1rem 2rem; }
+      header { padding: 1rem; }
+      .slot-wrapper { max-width: 100%; }
+      #explore-btn { width: 100%; }
+    }
+    @media (max-width: 480px) {
+      header h1 { font-size: 1.2rem; }
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Animate in results */
+    .fade-in { animation: fadeIn 0.3s ease forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+
+<!-- Disclaimer Banner -->
+<div id="disclaimer" role="banner" aria-label="Educational disclaimer">
+  ⚕️ <strong>Educational Use Only.</strong> This tool is for informational and educational purposes only. It is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider before making decisions about medications.
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">💊</div>
+  <div>
+    <h1>Drug Safety Explorer</h1>
+    <p>Explore FDA adverse events, labeling, and approval data for up to 4 drugs</p>
+  </div>
+</header>
+
+<main>
+  <!-- Drug Input Zone -->
+  <section id="input-zone" aria-label="Drug search">
+    <h2>Search Drugs to Compare</h2>
+    <div id="slots-container"></div>
+    <div id="slot-controls">
+      <button id="add-drug-btn" aria-label="Add another drug slot">+ Add Drug</button>
+    </div>
+    <div>
+      <div class="presets-label">Quick comparisons:</div>
+      <div class="presets-row">
+        <button class="preset-btn" data-preset="ibuprofen,acetaminophen" data-names="Ibuprofen,Acetaminophen">Compare Ibuprofen vs Acetaminophen →</button>
+        <button class="preset-btn" data-preset="semaglutide,semaglutide" data-names="Ozempic,Wegovy">Compare Ozempic vs Wegovy →</button>
+      </div>
+    </div>
+    <button id="explore-btn">Explore</button>
+  </section>
+
+  <!-- Results Dashboard -->
+  <div id="results" class="hidden" aria-live="polite">
+
+    <!-- Summary Cards -->
+    <div class="results-section">
+      <div class="section-header">
+        <h2>Drug Overview</h2>
+      </div>
+      <div id="summary-cards" class="cards-grid"></div>
+    </div>
+
+    <!-- Approval History -->
+    <div class="results-section">
+      <div class="section-header">
+        <h2>Approval History</h2>
+        <button class="help-btn" aria-label="Help: Approval history" data-modal-title="About Approval History" data-modal-body="This data comes from Drugs@FDA, which covers FDA approval records. NDA (New Drug Application) is submitted for brand-name drugs. ANDA (Abbreviated New Drug Application) covers generics. BLA (Biologics License Application) is for biologic drugs. Approval data is most complete for drugs approved after 1998.">?</button>
+      </div>
+      <div id="approval-cards" class="cards-grid"></div>
+    </div>
+
+    <!-- Adverse Event Charts -->
+    <div class="results-section">
+      <div class="section-header">
+        <h2>Adverse Event Reports (FAERS)</h2>
+        <button class="help-btn" aria-label="Help: FAERS data" data-modal-title="What is FAERS?" data-modal-body="The FDA Adverse Event Reporting System (FAERS) collects voluntary reports of adverse events from patients, healthcare providers, and manufacturers. These reports are submitted — not verified. A high report count does not mean a drug is dangerous; widely used drugs naturally generate more reports.">?</button>
+      </div>
+
+      <!-- Outcome Donuts -->
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;color:var(--muted);">Outcome Breakdown
+        <button class="help-btn" aria-label="Help: Outcome data" style="margin-left:0.5rem" data-modal-title="About These Outcomes" data-modal-body="These outcomes are self-reported and not medically verified. 'Fatal' means the reporter indicated the patient died — it does not confirm the drug caused the death. 'Unknown' is common because reporters often omit this field.">?</button>
+      </h3>
+      <div id="outcome-charts" class="charts-grid" style="margin-bottom:1.5rem"></div>
+
+      <!-- Demographics -->
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;color:var(--muted);">Demographics
+        <button class="help-btn" aria-label="Help: Demographics" style="margin-left:0.5rem" data-modal-title="About Demographics" data-modal-body="Age and sex data comes from the adverse event report, which is often filled in by a healthcare provider or consumer. Many reports leave demographics blank, which is why 'Unknown' may appear large.">?</button>
+      </h3>
+      <div id="demo-charts" class="charts-grid" style="margin-bottom:1.5rem"></div>
+
+      <!-- Top Reactions -->
+      <h3 style="font-size:0.95rem;font-weight:600;margin-bottom:0.75rem;color:var(--muted);">Top Reported Reactions
+        <button class="help-btn" aria-label="Help: Reactions" style="margin-left:0.5rem" data-modal-title="What Are These Reactions?" data-modal-body="These are MedDRA terms — a standardized medical vocabulary. One report can list many reactions. A reaction appearing often means it was frequently mentioned alongside this drug, not that the drug definitively caused it.">?</button>
+      </h3>
+      <div id="reaction-charts" class="charts-grid"></div>
+    </div>
+
+    <!-- Labeling Panel -->
+    <div class="results-section">
+      <div class="section-header">
+        <h2>Official Labeling</h2>
+        <button class="help-btn" aria-label="Help: Labeling data" data-modal-title="About Labeling Data" data-modal-body="Product labeling data reflects what the manufacturer submitted to the FDA as Structured Product Labeling (SPL). It may be outdated, vary by formulation, or show labeling for a different dosage form than you intended. Always read the label on the actual product.">?</button>
+      </div>
+      <div id="labeling-cards" class="cards-grid"></div>
+    </div>
+
+    <!-- About This Data -->
+    <div id="about-data">
+      <div id="about-data-header" role="button" aria-expanded="false" tabindex="0">
+        <h2>▼ About This Data &amp; Its Limitations</h2>
+        <span id="about-data-arrow">›</span>
+      </div>
+      <div id="about-data-body">
+        <div class="about-grid">
+          <div class="about-item">
+            <h4>What is FAERS?</h4>
+            <p>The FDA Adverse Event Reporting System collects voluntary reports. Reports are submitted — not verified — meaning the FDA does not confirm a drug caused the event described.</p>
+          </div>
+          <div class="about-item">
+            <h4>Why counts can mislead</h4>
+            <p>Popular drugs have more reports simply because more people take them. A drug with 100,000 reports is not necessarily more dangerous than one with 1,000.</p>
+          </div>
+          <div class="about-item">
+            <h4>Data lag</h4>
+            <p>FAERS data is released quarterly and may lag by 3 or more months. Recent safety signals may not yet be reflected.</p>
+          </div>
+          <div class="about-item">
+            <h4>Underreporting</h4>
+            <p>Adverse events are significantly underreported. Studies estimate only a fraction of real-world adverse events are ever submitted to the FDA.</p>
+          </div>
+          <div class="about-item">
+            <h4>Correlation ≠ Causation</h4>
+            <p>A report listing a drug alongside a reaction does not mean the drug caused the reaction. The patient may have been taking many drugs, or the event may be unrelated.</p>
+          </div>
+          <div class="about-item">
+            <h4>Drugs@FDA coverage</h4>
+            <p>Approval data is most complete for drugs approved after 1998. Older approvals may have incomplete records.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+</main>
+
+<!-- Footer -->
+<footer>
+  <p>This tool uses the openFDA API but is not endorsed by or affiliated with the U.S. Food and Drug Administration.</p>
+  <p>Data sourced from <a href="https://open.fda.gov" target="_blank" rel="noopener">openFDA</a> — provided for informational purposes and has not been validated for clinical use.</p>
+  <p>Drug safety data from FDA Adverse Event Reporting System (FAERS), FDA Structured Product Labeling, and Drugs@FDA.</p>
+  <p><a href="https://open.fda.gov/terms/" target="_blank" rel="noopener">OpenFDA Terms of Service</a> &nbsp;|&nbsp; <a href="https://open.fda.gov/apis/" target="_blank" rel="noopener">API Documentation</a></p>
+</footer>
+
+<!-- Info Modal -->
+<div id="modal-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div id="modal-box">
+    <button id="modal-close" aria-label="Close modal">×</button>
+    <h3 id="modal-title"></h3>
+    <p id="modal-body"></p>
+    <button id="modal-got-it">Got it</button>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// Constants & Config
+// ─────────────────────────────────────────────
+const FDA = 'https://api.fda.gov';
+const DRUG_COLORS = ['#D97B4F', '#5B8E8C', '#8B6DB5', '#D4A017'];
+const DRUG_COLORS_ALPHA = ['rgba(217,123,79,0.2)', 'rgba(91,142,140,0.2)', 'rgba(139,109,181,0.2)', 'rgba(212,160,23,0.2)'];
+const MAX_SLOTS = 4;
+
+const OUTCOME_MAP = {
+  '1': 'Recovered',
+  '2': 'Recovering',
+  '3': 'Not Recovered',
+  '4': 'Recovered w/ Effects',
+  '5': 'Fatal',
+  '6': 'Unknown'
+};
+const SEX_MAP = { '0': 'Unknown', '1': 'Male', '2': 'Female' };
+const AGE_MAP = {
+  '1': 'Neonate', '2': 'Infant', '3': 'Child',
+  '4': 'Adolescent', '5': 'Adult', '6': 'Elderly'
+};
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+let slotCount = 0;
+let slots = [];
+let cache = {};
+let chartInstances = {};
+let acControllers = {};
+
+// ─────────────────────────────────────────────
+// API Helpers
+// ─────────────────────────────────────────────
+async function apiFetch(url) {
+  const r = await fetch(url);
+  if (r.status === 429) throw new Error('RATE_LIMIT');
+  if (!r.ok) throw new Error('NOT_FOUND');
+  return r.json();
+}
+
+function buildSearch(drug) {
+  // Try both brand and generic, prefer generic for FAERS
+  const g = drug.genericName ? `"${drug.genericName}"` : null;
+  const b = drug.brandName ? `"${drug.brandName}"` : null;
+  if (g && b) return `(patient.drug.openfda.generic_name:${g}+patient.drug.openfda.brand_name:${b})`;
+  if (g) return `patient.drug.openfda.generic_name:${g}`;
+  return `patient.drug.openfda.brand_name:${b}`;
+}
+
+async function fetchAdverseEvents(drug) {
+  const s = buildSearch(drug);
+  const base = `${FDA}/drug/event.json?search=${encodeURIComponent(s)}`;
+  const [outcomes, sex, age, reactions, total] = await Promise.allSettled([
+    apiFetch(`${base}&count=patient.reaction.reactionoutcome`),
+    apiFetch(`${base}&count=patient.patientsex`),
+    apiFetch(`${base}&count=patient.patientagegroup`),
+    apiFetch(`${base}&count=patient.reaction.reactionmeddrapt.exact&limit=10`),
+    apiFetch(`${base}&limit=1`),
+  ]);
+  return {
+    outcomes: outcomes.status === 'fulfilled' ? outcomes.value.results : null,
+    sex: sex.status === 'fulfilled' ? sex.value.results : null,
+    age: age.status === 'fulfilled' ? age.value.results : null,
+    reactions: reactions.status === 'fulfilled' ? reactions.value.results : null,
+    total: total.status === 'fulfilled' ? total.value.meta?.results?.total : null,
+  };
+}
+
+async function fetchLabel(drug) {
+  const terms = [];
+  if (drug.genericName) terms.push(`openfda.generic_name:"${drug.genericName}"`);
+  if (drug.brandName) terms.push(`openfda.brand_name:"${drug.brandName}"`);
+  const s = terms.join('+');
+  try {
+    const data = await apiFetch(`${FDA}/drug/label.json?search=${encodeURIComponent(s)}&limit=1`);
+    return data.results?.[0] || null;
+  } catch { return null; }
+}
+
+async function fetchDrugsAtFDA(drug) {
+  const terms = [];
+  if (drug.brandName) terms.push(`openfda.brand_name:"${drug.brandName}"`);
+  if (drug.genericName) terms.push(`openfda.generic_name:"${drug.genericName}"`);
+  const s = terms.join('+');
+  try {
+    const data = await apiFetch(`${FDA}/drug/drugsfda.json?search=${encodeURIComponent(s)}&limit=1`);
+    return data.results?.[0] || null;
+  } catch { return null; }
+}
+
+// ─────────────────────────────────────────────
+// Autocomplete
+// ─────────────────────────────────────────────
+const acTimers = {};
+
+async function autocomplete(slotId, query) {
+  if (query.length < 2) { hideDropdown(slotId); return; }
+  if (acControllers[slotId]) acControllers[slotId].abort();
+  acControllers[slotId] = new AbortController();
+  const sig = acControllers[slotId].signal;
+  try {
+    const q = encodeURIComponent(query);
+    const [byBrand, byGeneric] = await Promise.all([
+      fetch(`${FDA}/drug/label.json?search=openfda.brand_name:${q}*&limit=5`, { signal: sig }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${FDA}/drug/label.json?search=openfda.generic_name:${q}*&limit=5`, { signal: sig }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    if (sig.aborted) return;
+    const seen = new Set();
+    const results = [];
+    for (const src of [byBrand, byGeneric]) {
+      if (!src?.results) continue;
+      for (const r of src.results) {
+        const brand = r.openfda?.brand_name?.[0] || '';
+        const generic = r.openfda?.generic_name?.[0] || '';
+        const key = (brand + '|' + generic).toLowerCase();
+        if (!seen.has(key) && (brand || generic)) {
+          seen.add(key);
+          results.push({ brand, generic });
+        }
+      }
+    }
+    showDropdown(slotId, results);
+  } catch {}
+}
+
+function showDropdown(slotId, results) {
+  const list = document.querySelector(`#slot-${slotId} .autocomplete-list`);
+  if (!list) return;
+  if (!results.length) { list.classList.add('hidden'); return; }
+  list.innerHTML = results.map((r, i) =>
+    `<div class="ac-item" data-brand="${esc(r.brand)}" data-generic="${esc(r.generic)}" tabindex="-1">
+      <div class="ac-brand">${esc(r.brand || r.generic)}</div>
+      ${r.brand && r.generic ? `<div class="ac-generic">${esc(r.generic)}</div>` : ''}
+    </div>`
+  ).join('');
+  list.querySelectorAll('.ac-item').forEach(item => {
+    item.addEventListener('mousedown', e => {
+      e.preventDefault();
+      selectDrug(slotId, item.dataset.brand, item.dataset.generic);
+    });
+  });
+  list.classList.remove('hidden');
+}
+
+function hideDropdown(slotId) {
+  const list = document.querySelector(`#slot-${slotId} .autocomplete-list`);
+  if (list) list.classList.add('hidden');
+}
+
+function selectDrug(slotId, brand, generic) {
+  const slot = slots.find(s => s.id === slotId);
+  if (!slot) return;
+  slot.brandName = brand;
+  slot.genericName = generic;
+  slot.inputName = brand || generic;
+  const input = document.querySelector(`#slot-${slotId} input`);
+  if (input) {
+    input.value = brand || generic;
+    input.classList.add('has-value');
+  }
+  hideDropdown(slotId);
+}
+
+// ─────────────────────────────────────────────
+// Slot Management
+// ─────────────────────────────────────────────
+function createSlot() {
+  if (slots.length >= MAX_SLOTS) return;
+  const id = slotCount++;
+  const idx = slots.length;
+  slots.push({ id, brandName: '', genericName: '', inputName: '' });
+
+  const wrap = document.createElement('div');
+  wrap.className = 'slot-wrapper fade-in';
+  wrap.id = `slot-${id}`;
+
+  const colorDot = DRUG_COLORS[idx];
+  wrap.innerHTML = `
+    <label class="slot-label">
+      <span class="drug-color-dot" style="background:${colorDot}"></span>Drug ${idx + 1}
+    </label>
+    <input type="text" placeholder="e.g. ibuprofen" autocomplete="off"
+      aria-label="Drug ${idx + 1} search" />
+    <button class="remove-slot" aria-label="Remove drug ${idx + 1}">×</button>
+    <div class="autocomplete-list hidden" role="listbox"></div>
+  `;
+
+  const input = wrap.querySelector('input');
+  const removeBtn = wrap.querySelector('.remove-slot');
+
+  input.addEventListener('input', e => {
+    const val = e.target.value.trim();
+    const slot = slots.find(s => s.id === id);
+    if (slot) { slot.inputName = val; slot.brandName = ''; slot.genericName = ''; }
+    input.classList.toggle('has-value', !!val);
+    clearTimeout(acTimers[id]);
+    acTimers[id] = setTimeout(() => autocomplete(id, val), 300);
+  });
+
+  input.addEventListener('keydown', e => {
+    const list = wrap.querySelector('.autocomplete-list');
+    const items = list.querySelectorAll('.ac-item');
+    const activeItem = list.querySelector('.ac-item.active');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = activeItem ? activeItem.nextElementSibling : items[0];
+      if (next) { activeItem?.classList.remove('active'); next.classList.add('active'); }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = activeItem?.previousElementSibling;
+      if (prev) { activeItem.classList.remove('active'); prev.classList.add('active'); }
+    } else if (e.key === 'Enter') {
+      if (activeItem) {
+        e.preventDefault();
+        selectDrug(id, activeItem.dataset.brand, activeItem.dataset.generic);
+      }
+    } else if (e.key === 'Escape') {
+      hideDropdown(id);
+    }
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => hideDropdown(id), 150));
+
+  removeBtn.addEventListener('click', () => removeSlot(id));
+
+  document.getElementById('slots-container').appendChild(wrap);
+  updateSlotControls();
+  return id;
+}
+
+function removeSlot(id) {
+  if (slots.length <= 1) return;
+  slots = slots.filter(s => s.id !== id);
+  document.getElementById(`slot-${id}`)?.remove();
+  updateSlotControls();
+}
+
+function updateSlotControls() {
+  document.getElementById('add-drug-btn').disabled = slots.length >= MAX_SLOTS;
+  // Update remove button visibility
+  document.querySelectorAll('.remove-slot').forEach(btn => {
+    btn.style.display = slots.length > 1 ? 'flex' : 'none';
+  });
+}
+
+// ─────────────────────────────────────────────
+// Chart Helpers
+// ─────────────────────────────────────────────
+function destroyChart(id) {
+  if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+
+function mkChart(id, config) {
+  destroyChart(id);
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  chartInstances[id] = new Chart(canvas, config);
+}
+
+// ─────────────────────────────────────────────
+// Rendering
+// ─────────────────────────────────────────────
+function renderSkeleton(container, count = 2) {
+  container.innerHTML = Array(count).fill(0).map(() =>
+    `<div class="skeleton skeleton-card"></div>`
+  ).join('');
+}
+
+function renderSummaryCard(slot, idx, label, fda) {
+  const brand = label?.openfda?.brand_name?.[0] || slot.brandName || slot.inputName || 'Unknown';
+  const generic = label?.openfda?.generic_name?.[0] || slot.genericName || '—';
+  const mfr = label?.openfda?.manufacturer_name?.[0] || fda?.sponsor_name || '—';
+  const status = fda?.products?.[0]?.marketing_status || '—';
+  const badgeClass = status.toLowerCase().includes('prescription') ? 'badge-rx'
+    : status.toLowerCase().includes('otc') || status.toLowerCase().includes('over-the') ? 'badge-otc'
+    : status.toLowerCase().includes('discontinued') ? 'badge-disc' : 'badge-rx';
+  const total = slot._events?.total;
+  const serious = slot._events?.outcomes?.find(o => o.term === '5');
+
+  return `
+    <div class="drug-card fade-in" data-slot="${idx}" aria-label="Summary for ${esc(brand)}">
+      <div class="brand-name">${esc(brand)}</div>
+      <div class="generic-name">${esc(generic)}</div>
+      <div class="card-row"><span class="card-label">Manufacturer</span><span class="card-value">${esc(mfr)}</span></div>
+      <div class="card-row"><span class="card-label">Status</span><span class="badge ${badgeClass}">${esc(status)}</span></div>
+      ${total != null ? `
+        <div class="count-row">
+          <span class="count-big">${total.toLocaleString()}</span>
+          <span style="font-size:0.8rem;color:var(--muted)">FAERS reports</span>
+          <button class="help-btn" aria-label="Help: FAERS report count"
+            data-modal-title="What does this number mean?"
+            data-modal-body="This is the total count of adverse event reports submitted to the FDA for this drug since 2004. A higher number does not mean a drug is more dangerous — widely used drugs naturally have more reports.">?</button>
+        </div>` : ''}
+    </div>`;
+}
+
+function renderApprovalCard(slot, idx, fda) {
+  const brand = fda?.openfda?.brand_name?.[0] || slot.brandName || slot.inputName || 'Unknown';
+  const submissions = fda?.submissions || [];
+  const approved = submissions.find(s => s.submission_status === 'AP') || submissions[0];
+  const appType = fda?.application_number?.replace(/\d+$/, '') || '—';
+  const approvalDate = approved?.submission_status_date
+    ? approved.submission_status_date.slice(0,4) : '—';
+  const sponsor = fda?.sponsor_name || '—';
+  const forms = fda?.products?.map(p => p.dosage_form).filter(Boolean).join(', ') || '—';
+
+  return `
+    <div class="approval-card fade-in" aria-label="Approval history for ${esc(brand)}">
+      <h3><span class="drug-color-dot" style="background:${DRUG_COLORS[idx]}"></span>${esc(brand)}</h3>
+      <div class="card-row">
+        <span class="card-label">Application Type</span>
+        <span class="card-value">${esc(appType)}
+          <button class="help-btn" aria-label="Help: Application type"
+            data-modal-title="What do these abbreviations mean?"
+            data-modal-body="NDA (New Drug Application) is submitted for brand-name drugs. ANDA (Abbreviated New Drug Application) covers generics. BLA (Biologics License Application) is for biologic drugs like insulin or vaccines.">?</button>
+        </span>
+      </div>
+      <div class="card-row"><span class="card-label">Approval Year</span><span class="card-value">${esc(approvalDate)}</span></div>
+      <div class="card-row"><span class="card-label">Sponsor</span><span class="card-value">${esc(sponsor)}</span></div>
+      <div class="card-row"><span class="card-label">Dosage Forms</span><span class="card-value" style="font-size:0.82rem;text-align:right;max-width:60%">${esc(forms)}</span></div>
+    </div>`;
+}
+
+function renderOutcomeChart(slot, idx) {
+  const outcomes = slot._events?.outcomes;
+  const id = `chart-outcome-${idx}`;
+  if (!outcomes?.length) {
+    return `<div class="chart-card"><h3>Outcomes</h3><div class="chart-drug-name">${esc(slot.brandName || slot.inputName)}</div><p class="not-found">No outcome data available.</p></div>`;
+  }
+  const labels = outcomes.map(o => OUTCOME_MAP[o.term] || `Code ${o.term}`);
+  const vals = outcomes.map(o => o.count);
+  const fatalIdx = outcomes.findIndex(o => o.term === '5');
+  const colors = outcomes.map((o, i) => {
+    if (o.term === '5') return '#C0392B';
+    if (o.term === '1') return '#27AE60';
+    if (o.term === '6') return '#BDC3C7';
+    return DRUG_COLORS[idx % DRUG_COLORS.length];
+  });
+  const total = vals.reduce((a, b) => a + b, 0);
+  return `
+    <div class="chart-card fade-in">
+      <h3>Outcomes
+        <button class="help-btn" aria-label="Help: Outcomes"
+          data-modal-title="About These Outcomes"
+          data-modal-body="These outcomes are self-reported and not medically verified. 'Fatal' means the reporter indicated the patient died — it does not confirm the drug caused the death.">?</button>
+      </h3>
+      <div class="chart-drug-name">${esc(slot.brandName || slot.inputName)}</div>
+      <div class="chart-canvas-wrap">
+        <canvas id="${id}" aria-label="Outcome breakdown chart for ${esc(slot.brandName || slot.inputName)}"></canvas>
+      </div>
+    </div>`;
+}
+
+function initOutcomeChart(slot, idx) {
+  const outcomes = slot._events?.outcomes;
+  if (!outcomes?.length) return;
+  const id = `chart-outcome-${idx}`;
+  const labels = outcomes.map(o => OUTCOME_MAP[o.term] || `Code ${o.term}`);
+  const vals = outcomes.map(o => o.count);
+  const colors = outcomes.map(o => {
+    if (o.term === '5') return '#C0392B';
+    if (o.term === '1') return '#27AE60';
+    if (o.term === '6') return '#BDC3C7';
+    if (o.term === '2') return '#2ECC71';
+    if (o.term === '4') return '#F39C12';
+    return DRUG_COLORS[idx % DRUG_COLORS.length];
+  });
+  mkChart(id, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: vals, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()}` } }
+      }
+    }
+  });
+}
+
+function renderDemoChart(slot, idx) {
+  const id = `chart-demo-${idx}`;
+  const sex = slot._events?.sex;
+  const age = slot._events?.age;
+  if (!sex?.length && !age?.length) {
+    return `<div class="chart-card"><h3>Demographics</h3><div class="chart-drug-name">${esc(slot.brandName || slot.inputName)}</div><p class="not-found">No demographic data available.</p></div>`;
+  }
+  return `
+    <div class="chart-card fade-in">
+      <h3>Demographics
+        <button class="help-btn" aria-label="Help: Demographics"
+          data-modal-title="About Demographics"
+          data-modal-body="Age and sex data comes from the adverse event report. Many reports leave demographics blank, which is why 'Unknown' may appear large.">?</button>
+      </h3>
+      <div class="chart-drug-name">${esc(slot.brandName || slot.inputName)}</div>
+      <div class="chart-canvas-wrap tall">
+        <canvas id="${id}" aria-label="Demographics chart for ${esc(slot.brandName || slot.inputName)}"></canvas>
+      </div>
+    </div>`;
+}
+
+function initDemoChart(slot, idx) {
+  const sex = slot._events?.sex;
+  const age = slot._events?.age;
+  const id = `chart-demo-${idx}`;
+  const color = DRUG_COLORS[idx % DRUG_COLORS.length];
+  const alpha = DRUG_COLORS_ALPHA[idx % DRUG_COLORS_ALPHA.length];
+
+  const labels = [];
+  const data = [];
+
+  if (age?.length) {
+    age.forEach(a => {
+      labels.push(AGE_MAP[a.term] || `Age ${a.term}`);
+      data.push(a.count);
+    });
+  }
+  if (sex?.length) {
+    sex.forEach(s => {
+      labels.push(SEX_MAP[s.term] || `Sex ${s.term}`);
+      data.push(s.count);
+    });
+  }
+
+  if (!labels.length) return;
+
+  mkChart(id, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: slot.brandName || slot.inputName,
+        data,
+        backgroundColor: color,
+        borderColor: color,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 } }, grid: { color: '#F0E8DF' } },
+        y: { ticks: { font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderReactionChart(slot, idx) {
+  const id = `chart-reactions-${idx}`;
+  const reactions = slot._events?.reactions;
+  if (!reactions?.length) {
+    return `<div class="chart-card"><h3>Top Reactions</h3><div class="chart-drug-name">${esc(slot.brandName || slot.inputName)}</div><p class="not-found">No reaction data available.</p></div>`;
+  }
+  return `
+    <div class="chart-card fade-in">
+      <h3>Top Reactions
+        <button class="help-btn" aria-label="Help: Reactions"
+          data-modal-title="What Are These Reactions?"
+          data-modal-body="These are MedDRA terms — a standardized medical vocabulary. One report can list many reactions. A reaction appearing often means it was frequently mentioned alongside this drug, not that the drug definitively caused it.">?</button>
+      </h3>
+      <div class="chart-drug-name">${esc(slot.brandName || slot.inputName)}</div>
+      <div class="chart-canvas-wrap tall">
+        <canvas id="${id}" aria-label="Top reactions chart for ${esc(slot.brandName || slot.inputName)}"></canvas>
+      </div>
+    </div>`;
+}
+
+function initReactionChart(slot, idx) {
+  const reactions = slot._events?.reactions;
+  if (!reactions?.length) return;
+  const id = `chart-reactions-${idx}`;
+  const top = reactions.slice(0, 10);
+  const color = DRUG_COLORS[idx % DRUG_COLORS.length];
+  mkChart(id, {
+    type: 'bar',
+    data: {
+      labels: top.map(r => toTitleCase(r.term)),
+      datasets: [{
+        label: slot.brandName || slot.inputName,
+        data: top.map(r => r.count),
+        backgroundColor: color,
+        borderColor: color,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 } }, grid: { color: '#F0E8DF' } },
+        y: { ticks: { font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderLabelingCard(slot, idx, labelData) {
+  const brand = labelData?.openfda?.brand_name?.[0] || slot.brandName || slot.inputName || 'Unknown';
+  const boxedWarning = labelData?.boxed_warning?.[0] || null;
+  const warnings = labelData?.warnings_and_cautions?.[0] || labelData?.warnings?.[0] || null;
+  const contraindications = labelData?.contraindications?.[0] || null;
+  const interactions = labelData?.drug_interactions?.[0] || null;
+
+  const tabId = `label-tabs-${idx}`;
+
+  return `
+    <div class="labeling-card fade-in">
+      <h3><span class="drug-color-dot" style="background:${DRUG_COLORS[idx]}"></span>${esc(brand)}</h3>
+      <div class="tab-bar" role="tablist">
+        <button class="tab-btn active" role="tab" aria-selected="true" data-tab="${tabId}-bb">⚠️ Black Box</button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="${tabId}-warn">Warnings</button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="${tabId}-int">Interactions
+          <button class="help-btn" style="margin-left:4px" aria-label="Help: Interactions"
+            data-modal-title="About Interactions Data"
+            data-modal-body="This text comes from the official prescribing information submitted by the manufacturer. It may not reflect newly discovered interactions.">?</button>
+        </button>
+      </div>
+      <div id="${tabId}-bb" class="tab-content active">
+        ${boxedWarning
+          ? `<div class="black-box"><div class="bb-label">⬛ Black Box Warning
+              <button class="help-btn" aria-label="Help: Black box warning"
+                data-modal-title="What is a Black Box Warning?"
+                data-modal-body="A Black Box Warning is the FDA's most serious warning. It means clinical studies found the drug carries a significant risk of serious or life-threatening adverse effects.">?</button>
+            </div><p class="label-text">${esc(boxedWarning)}</p></div>`
+          : `<p class="no-bb">No black box warning found in current labeling data.</p>`
+        }
+      </div>
+      <div id="${tabId}-warn" class="tab-content">
+        ${warnings || contraindications
+          ? `<div class="label-text truncated" id="${tabId}-warn-text">${esc((warnings || '') + (contraindications ? '\n\nContraindications:\n' + contraindications : ''))}</div>
+             <button class="read-more-btn" data-target="${tabId}-warn-text">Read more</button>`
+          : `<p class="not-found">Not found in current labeling.</p>`
+        }
+      </div>
+      <div id="${tabId}-int" class="tab-content">
+        ${interactions
+          ? `<div class="label-text truncated" id="${tabId}-int-text">${esc(interactions)}</div>
+             <button class="read-more-btn" data-target="${tabId}-int-text">Read more</button>`
+          : `<p class="not-found">Not found in current labeling.</p>`
+        }
+      </div>
+    </div>`;
+}
+
+function renderError(drug, message) {
+  return `<div class="error-card fade-in"><h4>No data for "${esc(drug)}"</h4><p>${esc(message)}</p></div>`;
+}
+
+// ─────────────────────────────────────────────
+// Main Search Flow
+// ─────────────────────────────────────────────
+async function runSearch() {
+  const activeDrugs = slots.filter(s => s.inputName || s.brandName || s.genericName);
+  if (!activeDrugs.length) { alert('Please enter at least one drug name.'); return; }
+
+  // Normalize slots — if user typed without selecting autocomplete, use inputName
+  activeDrugs.forEach(s => {
+    if (!s.brandName && !s.genericName) {
+      const v = s.inputName.toLowerCase();
+      s.genericName = v;
+      s.brandName = s.inputName;
+    }
+  });
+
+  document.getElementById('explore-btn').disabled = true;
+  document.getElementById('results').classList.remove('hidden');
+
+  // Show skeletons
+  ['summary-cards', 'approval-cards', 'outcome-charts', 'demo-charts', 'reaction-charts', 'labeling-cards']
+    .forEach(id => renderSkeleton(document.getElementById(id), activeDrugs.length));
+
+  // Fetch all in parallel
+  const fetches = activeDrugs.map(async (slot, idx) => {
+    try {
+      const [events, label, fda] = await Promise.all([
+        fetchAdverseEvents(slot).catch(() => null),
+        fetchLabel(slot).catch(() => null),
+        fetchDrugsAtFDA(slot).catch(() => null),
+      ]);
+      slot._events = events;
+      slot._label = label;
+      slot._fda = fda;
+      return { slot, idx, ok: true };
+    } catch (err) {
+      return { slot, idx, ok: false, err };
+    }
+  });
+
+  const results = await Promise.all(fetches);
+
+  // Render summary cards
+  document.getElementById('summary-cards').innerHTML =
+    results.map(({ slot, idx, ok }) =>
+      ok ? renderSummaryCard(slot, idx, slot._label, slot._fda)
+         : renderError(slot.inputName, 'Could not load data for this drug.')
+    ).join('');
+
+  // Render approval cards
+  document.getElementById('approval-cards').innerHTML =
+    results.map(({ slot, idx, ok }) =>
+      ok ? renderApprovalCard(slot, idx, slot._fda)
+         : ''
+    ).join('');
+
+  // Render charts HTML
+  document.getElementById('outcome-charts').innerHTML = results.map(({ slot, idx, ok }) =>
+    ok ? renderOutcomeChart(slot, idx) : '').join('');
+  document.getElementById('demo-charts').innerHTML = results.map(({ slot, idx, ok }) =>
+    ok ? renderDemoChart(slot, idx) : '').join('');
+  document.getElementById('reaction-charts').innerHTML = results.map(({ slot, idx, ok }) =>
+    ok ? renderReactionChart(slot, idx) : '').join('');
+
+  // Render labeling cards
+  document.getElementById('labeling-cards').innerHTML =
+    results.map(({ slot, idx, ok }) =>
+      ok ? renderLabelingCard(slot, idx, slot._label) : ''
+    ).join('');
+
+  // Initialize charts (lazy with IntersectionObserver)
+  const pendingCharts = new Map();
+  results.forEach(({ slot, idx, ok }) => {
+    if (!ok) return;
+    const ocEl = document.getElementById(`chart-outcome-${idx}`)?.closest('.chart-card');
+    const dmEl = document.getElementById(`chart-demo-${idx}`)?.closest('.chart-card');
+    const rxEl = document.getElementById(`chart-reactions-${idx}`)?.closest('.chart-card');
+    if (ocEl) pendingCharts.set(ocEl, () => initOutcomeChart(slot, idx));
+    if (dmEl) pendingCharts.set(dmEl, () => initDemoChart(slot, idx));
+    if (rxEl) pendingCharts.set(rxEl, () => initReactionChart(slot, idx));
+  });
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const fn = pendingCharts.get(entry.target);
+        if (fn) { fn(); pendingCharts.delete(entry.target); observer.unobserve(entry.target); }
+      }
+    });
+  }, { rootMargin: '80px' });
+
+  pendingCharts.forEach((_, el) => observer.observe(el));
+
+  // Wire up tab buttons and read-more
+  wireTabButtons();
+  wireReadMore();
+  wireHelpButtons();
+
+  document.getElementById('explore-btn').disabled = false;
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ─────────────────────────────────────────────
+// UI Wiring
+// ─────────────────────────────────────────────
+function wireTabButtons() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      // Don't trigger if clicking the nested help button
+      if (e.target.classList.contains('help-btn')) return;
+      const tabId = btn.dataset.tab;
+      if (!tabId) return;
+      const card = btn.closest('.labeling-card');
+      card.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+      card.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      document.getElementById(tabId)?.classList.add('active');
+    });
+  });
+}
+
+function wireReadMore() {
+  document.querySelectorAll('.read-more-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.target);
+      if (!target) return;
+      const expanded = target.classList.toggle('truncated');
+      btn.textContent = expanded ? 'Read more' : 'Show less';
+    });
+  });
+}
+
+function wireHelpButtons() {
+  document.querySelectorAll('.help-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openModal(btn.dataset.modalTitle, btn.dataset.modalBody);
+    });
+  });
+}
+
+// ─────────────────────────────────────────────
+// Modal
+// ─────────────────────────────────────────────
+let modalTrigger = null;
+
+function openModal(title, body) {
+  document.getElementById('modal-title').textContent = title || '';
+  document.getElementById('modal-body').textContent = body || '';
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('modal-got-it').focus();
+  modalTrigger = document.activeElement;
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  if (modalTrigger) { modalTrigger.focus(); modalTrigger = null; }
+}
+
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal-got-it').addEventListener('click', closeModal);
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ─────────────────────────────────────────────
+// About Data Toggle
+// ─────────────────────────────────────────────
+const aboutHeader = document.getElementById('about-data-header');
+const aboutBody = document.getElementById('about-data-body');
+const aboutArrow = document.getElementById('about-data-arrow');
+
+function toggleAbout() {
+  const open = aboutBody.classList.toggle('open');
+  aboutHeader.setAttribute('aria-expanded', open);
+  aboutArrow.style.transform = open ? 'rotate(90deg)' : '';
+}
+aboutHeader.addEventListener('click', toggleAbout);
+aboutHeader.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAbout(); } });
+
+// ─────────────────────────────────────────────
+// Explore Button
+// ─────────────────────────────────────────────
+document.getElementById('explore-btn').addEventListener('click', runSearch);
+
+document.getElementById('add-drug-btn').addEventListener('click', () => createSlot());
+
+// Preset buttons
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const presetNames = btn.dataset.names.split(',');
+    const presetGenerics = btn.dataset.preset.split(',');
+
+    // Clear existing slots
+    const container = document.getElementById('slots-container');
+    container.innerHTML = '';
+    slots = [];
+    slotCount = 0;
+
+    presetGenerics.forEach((generic, i) => {
+      const id = createSlot();
+      const s = slots.find(sl => sl.id === id);
+      if (s) {
+        s.genericName = generic;
+        s.brandName = presetNames[i] || generic;
+        s.inputName = presetNames[i] || generic;
+      }
+      const input = document.querySelector(`#slot-${id} input`);
+      if (input) { input.value = presetNames[i] || generic; input.classList.add('has-value'); }
+    });
+  });
+});
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function toTitleCase(str) {
+  return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+createSlot();
+createSlot();
+wireHelpButtons(); // wire static help buttons in section headers
+</script>
+</body>
+</html>
