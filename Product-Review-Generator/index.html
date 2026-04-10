@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Review Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
+  <style>
+    :root {
+      --bg:      #0f1117;
+      --bg2:     #1a1d27;
+      --bg3:     #22263a;
+      --border:  #2e3248;
+      --accent:  #a78bfa;
+      --oai:     #10a37f;
+      --text:    #e2e8f0;
+      --muted:   #94a3b8;
+      --yellow:  #fbbf24;
+      --red:     #f87171;
+      --green:   #34d399;
+      --radius:  8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 1.05rem; font-weight: 700; color: var(--accent); }
+    header p  { font-size: 12px; color: var(--muted); }
+
+    /* ── Layout ── */
+    #app {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+    .card h2 {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── Segmented Toggle ── */
+    .seg { display: flex; gap: 4px; }
+    .seg button {
+      flex: 1;
+      padding: 7px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .seg button:hover:not(.active):not(:disabled) { color: var(--text); background: var(--bg3); }
+    .seg button.active { background: var(--bg3); border-color: var(--accent); color: var(--text); }
+    .seg button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── Radio group ── */
+    .radio-group { display: flex; flex-direction: column; gap: 6px; }
+    .radio-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .radio-option:hover { background: var(--bg3); }
+    .radio-option.selected { border-color: var(--accent); background: var(--bg3); }
+    .radio-option input[type=radio] { accent-color: var(--accent); margin-top: 2px; flex-shrink: 0; }
+    .radio-label { display: flex; flex-direction: column; gap: 1px; }
+    .radio-label strong { font-size: 13px; }
+    .radio-label span { font-size: 11px; color: var(--muted); }
+    .tier-badge {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 20px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+      align-self: center;
+    }
+
+    /* ── Form elements ── */
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    input[type=text], input[type=password], textarea, select {
+      width: 100%;
+      padding: 8px 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 70px; }
+    select option { background: var(--bg2); }
+    .char-count { font-size: 11px; color: var(--muted); text-align: right; margin-top: 3px; }
+    .char-count.over { color: var(--red); }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .field { display: flex; flex-direction: column; }
+
+    /* ── Star picker ── */
+    .star-picker { display: flex; gap: 6px; }
+    .star-picker span {
+      font-size: 26px;
+      cursor: pointer;
+      color: var(--border);
+      transition: color 0.1s, transform 0.1s;
+      line-height: 1;
+    }
+    .star-picker span.lit { color: var(--yellow); }
+    .star-picker span:hover { transform: scale(1.15); }
+
+    /* ── Tone / Length toggles ── */
+    .toggle-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .toggle-btn {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .toggle-btn:hover { color: var(--text); border-color: var(--muted); }
+    .toggle-btn.active { background: var(--bg3); border-color: var(--accent); color: var(--text); }
+
+    /* ── Key row ── */
+    .key-row { display: flex; gap: 8px; align-items: center; }
+    .key-row input { flex: 1; }
+    .key-row button {
+      padding: 7px 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .key-hint { font-size: 11px; margin-top: 4px; height: 14px; }
+    .key-hint.ok  { color: var(--green); }
+    .key-hint.bad { color: var(--red); }
+
+    /* ── Generate button ── */
+    #generate-btn {
+      width: 100%;
+      padding: 11px;
+      border-radius: var(--radius);
+      border: none;
+      background: var(--accent);
+      color: #0f1117;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #generate-btn:hover { opacity: 0.88; }
+    #generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Output ── */
+    #output-card { display: none; }
+    .output-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .output-stars { color: var(--yellow); font-size: 20px; letter-spacing: 1px; }
+    .output-copy {
+      padding: 5px 13px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .output-copy:hover { color: var(--text); }
+    #output-body {
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--text);
+    }
+    #output-body pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: inherit;
+    }
+    /* Markdown rendered styles */
+    #output-body p      { margin-bottom: 0.75em; }
+    #output-body strong { color: #fff; }
+    #output-body ul, #output-body ol { padding-left: 1.4em; margin-bottom: 0.75em; }
+    #output-body li     { margin-bottom: 0.25em; }
+
+    /* ── Status / error ── */
+    #status-bar {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      min-height: 18px;
+    }
+    #status-bar.err { color: var(--red); }
+    #status-bar.warn { color: var(--yellow); }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+    /* ── Aspect Sentiment ── */
+    .aspect-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .aspect-chip {
+      padding: 5px 13px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .aspect-chip:hover { color: var(--text); border-color: var(--muted); }
+    .aspect-chip.on { background: var(--bg3); border-color: var(--accent); color: var(--text); }
+    .aspect-sliders { display: flex; flex-direction: column; gap: 10px; }
+    .aspect-row {
+      display: grid;
+      grid-template-columns: 110px 1fr 90px;
+      align-items: center;
+      gap: 12px;
+    }
+    .aspect-name { font-size: 12px; color: var(--text); font-weight: 500; }
+    .aspect-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      background: linear-gradient(to right, var(--red) 0%, var(--border) 50%, var(--green) 100%);
+    }
+    .aspect-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg2);
+      cursor: pointer;
+    }
+    .aspect-slider::-moz-range-thumb {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg2);
+      cursor: pointer;
+    }
+    .aspect-label { font-size: 11px; color: var(--muted); text-align: right; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Product Review Generator</h1>
+  <p>Generate authentic reviews via OpenAI — streaming, markdown-rendered</p>
+</header>
+
+<div id="app">
+
+  <!-- API Key -->
+  <div class="card">
+    <h2>API Key</h2>
+    <div class="field">
+      <label>OpenAI Key</label>
+      <div class="key-row">
+        <input type="password" id="key-openai" placeholder="sk-..." oninput="onKeyInput()" autocomplete="off" />
+        <button onclick="toggleVis('key-openai', this)">👁</button>
+      </div>
+      <div class="key-hint" id="hint-openai"></div>
+    </div>
+  </div>
+
+  <!-- Model -->
+  <div class="card">
+    <h2>Model</h2>
+
+    <label style="margin-bottom:8px">Model Family</label>
+    <div class="seg" id="family-seg"></div>
+
+    <div class="divider"></div>
+
+    <label style="margin-bottom:8px">Model</label>
+    <div class="radio-group" id="model-radio"></div>
+  </div>
+
+  <!-- Product Details -->
+  <div class="card">
+    <h2>Product Details</h2>
+
+    <div class="field" style="margin-bottom:12px">
+      <label>Product Name <span style="color:var(--red)">*</span></label>
+      <input type="text" id="product-name" maxlength="120" placeholder="e.g. Sony WH-1000XM5 Headphones" oninput="updateCharCount(this,'name-count',120)" />
+      <div class="char-count" id="name-count">0 / 120</div>
+    </div>
+
+    <div class="row" style="margin-bottom:12px">
+      <div class="field">
+        <label>Category <span style="color:var(--red)">*</span></label>
+        <select id="category">
+          <option value="Electronics">Electronics</option>
+          <option value="Apparel">Apparel</option>
+          <option value="Home & Kitchen">Home &amp; Kitchen</option>
+          <option value="Beauty">Beauty &amp; Personal Care</option>
+          <option value="Books">Books</option>
+          <option value="Sports">Sports &amp; Outdoors</option>
+          <option value="Toys">Toys &amp; Games</option>
+          <option value="Food & Beverage">Food &amp; Beverage</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Reviewer Persona</label>
+        <select id="persona">
+          <option value="Casual Buyer">Casual Buyer</option>
+          <option value="Tech Enthusiast">Tech Enthusiast</option>
+          <option value="Professional Critic">Professional Critic</option>
+          <option value="Parent">Parent</option>
+          <option value="Gift Buyer">Gift Buyer</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field" style="margin-bottom:4px">
+      <label>Product Description <span style="color:var(--red)">*</span></label>
+      <textarea id="description" maxlength="500" placeholder="Brief summary of features, what you used it for, etc." oninput="updateCharCount(this,'desc-count',500)"></textarea>
+      <div class="char-count" id="desc-count">0 / 500</div>
+    </div>
+  </div>
+
+  <!-- Review Options -->
+  <div class="card">
+    <h2>Review Options</h2>
+
+    <div class="field" style="margin-bottom:14px">
+      <label style="margin-bottom:8px">Star Rating <span style="color:var(--red)">*</span></label>
+      <div class="star-picker" id="star-picker">
+        <span data-v="1">★</span>
+        <span data-v="2">★</span>
+        <span data-v="3">★</span>
+        <span data-v="4">★</span>
+        <span data-v="5">★</span>
+      </div>
+    </div>
+
+    <div class="field" style="margin-bottom:14px">
+      <label style="margin-bottom:8px">Tone <span style="color:var(--red)">*</span></label>
+      <div class="toggle-row" id="tone-row">
+        <button class="toggle-btn active" data-v="Enthusiastic" onclick="setToggle('tone',this)">Enthusiastic</button>
+        <button class="toggle-btn" data-v="Balanced" onclick="setToggle('tone',this)">Balanced</button>
+        <button class="toggle-btn" data-v="Critical" onclick="setToggle('tone',this)">Critical</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label style="margin-bottom:8px">Review Length <span style="color:var(--red)">*</span></label>
+      <div class="toggle-row" id="length-row">
+        <button class="toggle-btn" data-v="Short" onclick="setToggle('length',this)">Short (~100 words)</button>
+        <button class="toggle-btn active" data-v="Medium" onclick="setToggle('length',this)">Medium (~250 words)</button>
+        <button class="toggle-btn" data-v="Long" onclick="setToggle('length',this)">Long (~500 words)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Aspect Sentiment -->
+  <div class="card">
+    <h2>Aspect Sentiment <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:10px">(optional)</span></h2>
+    <div class="aspect-chips" id="aspect-chips"></div>
+    <div class="aspect-sliders" id="aspect-sliders"></div>
+  </div>
+
+  <!-- Generate -->
+  <button id="generate-btn" onclick="generate()">Generate Review</button>
+  <div id="status-bar"></div>
+
+  <!-- Output -->
+  <div class="card" id="output-card">
+    <div class="output-meta">
+      <div class="output-stars" id="output-stars"></div>
+      <button class="output-copy" onclick="copyReview()">Copy</button>
+    </div>
+    <div id="output-body"></div>
+  </div>
+
+</div>
+
+<script>
+// ── Model data ────────────────────────────────────────────────────────────────
+
+const MODELS = {
+  families: ['GPT-4o', 'o-series'],
+  byFamily: {
+    'GPT-4o': [
+      { id: 'gpt-4o',      name: 'GPT-4o',      tier: 'Flagship', desc: 'Most capable GPT model' },
+      { id: 'gpt-4o-mini', name: 'GPT-4o mini', tier: 'Fast',     desc: 'Small, affordable GPT-4o' },
+    ],
+    'o-series': [
+      { id: 'o3',      name: 'o3',      tier: 'Reasoning',      desc: 'Powerful reasoning model' },
+      { id: 'o4-mini', name: 'o4-mini', tier: 'Reasoning / Fast', desc: 'Fast reasoning model' },
+    ],
+  },
+};
+
+const O_SERIES = new Set(['o3', 'o4-mini']);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+const state = {
+  openaiKey: '',
+  family:    'GPT-4o',
+  model:     'gpt-4o',
+  rating:    0,
+  tone:      'Enthusiastic',
+  length:    'Medium',
+  aspects:   {}, // { label: value 1–5 }
+};
+
+// ── Key handling ──────────────────────────────────────────────────────────────
+
+function onKeyInput() {
+  const val  = document.getElementById('key-openai').value.trim();
+  const hint = document.getElementById('hint-openai');
+  const ok   = val.startsWith('sk-') && !val.startsWith('sk-ant-') && val.length > 10;
+  state.openaiKey  = val;
+  hint.textContent = val.length === 0 ? '' : ok ? '✓ Key looks valid' : '⚠ Check key format';
+  hint.className   = `key-hint ${val.length === 0 ? '' : ok ? 'ok' : 'bad'}`;
+}
+
+function toggleVis(id, btn) {
+  const el = document.getElementById(id);
+  el.type  = el.type === 'password' ? 'text' : 'password';
+  btn.textContent = el.type === 'password' ? '👁' : '🙈';
+}
+
+function setFamily(f) {
+  state.family = f;
+  state.model  = MODELS.byFamily[f][0].id;
+  renderFamilySeg();
+  renderModelRadio();
+}
+
+function setModel(id) {
+  state.model = id;
+  renderModelRadio();
+}
+
+function renderFamilySeg() {
+  const seg = document.getElementById('family-seg');
+  seg.innerHTML = MODELS.families.map(f =>
+    `<button class="${f === state.family ? 'active' : ''}" onclick="setFamily('${f}')">${f}</button>`
+  ).join('');
+}
+
+function renderModelRadio() {
+  const container = document.getElementById('model-radio');
+  const models = MODELS.byFamily[state.family];
+  container.innerHTML = models.map(m => `
+    <label class="radio-option ${m.id === state.model ? 'selected' : ''}" onclick="setModel('${m.id}')">
+      <input type="radio" name="model" value="${m.id}" ${m.id === state.model ? 'checked' : ''} />
+      <div class="radio-label">
+        <strong>${m.name}</strong>
+        <span>${m.desc}</span>
+      </div>
+      <span class="tier-badge">${m.tier}</span>
+    </label>
+  `).join('');
+}
+
+// ── Form helpers ──────────────────────────────────────────────────────────────
+
+function updateCharCount(el, countId, max) {
+  const n = el.value.length;
+  const c = document.getElementById(countId);
+  c.textContent = `${n} / ${max}`;
+  c.className   = `char-count${n > max ? ' over' : ''}`;
+}
+
+// ── Star picker ───────────────────────────────────────────────────────────────
+
+function initStars() {
+  const stars = document.querySelectorAll('#star-picker span');
+  stars.forEach(s => {
+    s.addEventListener('click', () => {
+      state.rating = parseInt(s.dataset.v);
+      updateStarDisplay();
+    });
+    s.addEventListener('mouseenter', () => highlightStars(parseInt(s.dataset.v)));
+    s.addEventListener('mouseleave', () => updateStarDisplay());
+  });
+}
+
+function highlightStars(n) {
+  document.querySelectorAll('#star-picker span').forEach(s =>
+    s.classList.toggle('lit', parseInt(s.dataset.v) <= n)
+  );
+}
+
+function updateStarDisplay() {
+  highlightStars(state.rating);
+}
+
+// ── Aspect Sentiment ──────────────────────────────────────────────────────────
+
+const ASPECTS = ['Price', 'Features', 'Usability', 'Design', 'Durability', 'Value for Money', 'Customer Service'];
+const SENTIMENT_LABELS = ['Very Negative', 'Negative', 'Neutral', 'Positive', 'Very Positive'];
+
+function toggleAspect(label) {
+  if (state.aspects[label] !== undefined) {
+    delete state.aspects[label];
+  } else {
+    state.aspects[label] = 3; // default: Neutral
+  }
+  renderAspects();
+}
+
+function setAspectValue(label, val) {
+  state.aspects[label] = parseInt(val);
+  document.getElementById(`asp-lbl-${label.replace(/\s/g, '-')}`).textContent = SENTIMENT_LABELS[val - 1];
+}
+
+function renderAspects() {
+  const chips = document.getElementById('aspect-chips');
+  chips.innerHTML = ASPECTS.map(a =>
+    `<button class="aspect-chip${state.aspects[a] !== undefined ? ' on' : ''}" onclick="toggleAspect('${a}')">${a}</button>`
+  ).join('');
+
+  const sliders = document.getElementById('aspect-sliders');
+  const active  = ASPECTS.filter(a => state.aspects[a] !== undefined);
+  sliders.innerHTML = active.map(a => {
+    const safeId = a.replace(/\s/g, '-');
+    const val    = state.aspects[a];
+    return `
+      <div class="aspect-row">
+        <span class="aspect-name">${a}</span>
+        <input class="aspect-slider" type="range" min="1" max="5" value="${val}"
+          oninput="setAspectValue('${a}', this.value)" />
+        <span class="aspect-label" id="asp-lbl-${safeId}">${SENTIMENT_LABELS[val - 1]}</span>
+      </div>`;
+  }).join('');
+}
+
+// ── Tone / Length toggles ─────────────────────────────────────────────────────
+
+function setToggle(key, btn) {
+  state[key] = btn.dataset.v;
+  btn.closest('.toggle-row').querySelectorAll('.toggle-btn').forEach(b =>
+    b.classList.toggle('active', b === btn)
+  );
+}
+
+// ── Prompt builder ────────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are an expert product reviewer. Write authentic, helpful product reviews in the voice of the specified reviewer persona. Match the requested tone and length precisely. Use markdown formatting — paragraphs, bold key phrases, and a bullet list of pros/cons where appropriate. Do not include a headline or title — output the review body only.`;
+
+function buildPrompts({ productName, category, description, rating, tone, length, persona, aspects }) {
+  const aspectEntries = Object.entries(aspects);
+  const aspectBlock = aspectEntries.length
+    ? '\nAspect Sentiments (reflect these in the review):\n' +
+      aspectEntries.map(([k, v]) => `- ${k}: ${SENTIMENT_LABELS[v - 1]}`).join('\n')
+    : '';
+  const user = `Write a ${length} product review for the following item.\n\nProduct Name: ${productName}\nCategory: ${category}\nDescription: ${description}\nStar Rating: ${rating}/5\nTone: ${tone}\nReviewer Persona: ${persona}${aspectBlock}\n\nWrite the review now.`;
+  return { systemPrompt: SYSTEM_PROMPT, userPrompt: user };
+}
+
+// ── SSE stream helpers ────────────────────────────────────────────────────────
+
+async function* readSSEStream(response) {
+  const reader  = response.body.getReader();
+  const decoder = new TextDecoder();
+  let   buffer  = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop(); // keep incomplete line
+    for (const line of lines) {
+      if (line.startsWith('data: ')) yield line.slice(6);
+    }
+  }
+}
+
+// ── OpenAI streaming ──────────────────────────────────────────────────────────
+
+async function streamOpenAI({ key, model, systemPrompt, userPrompt, onToken }) {
+  const isOSeries = O_SERIES.has(model);
+  const messages  = isOSeries
+    ? [{ role: 'user', content: `[${systemPrompt}]\n\n${userPrompt}` }]
+    : [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt   },
+      ];
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type':  'application/json',
+    },
+    body: JSON.stringify({ model, stream: true, messages }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `OpenAI API error ${res.status}`);
+  }
+
+  for await (const raw of readSSEStream(res)) {
+    if (!raw || raw === '[DONE]') break;
+    try {
+      const evt = JSON.parse(raw);
+      const token = evt.choices?.[0]?.delta?.content;
+      if (token) onToken(token);
+    } catch (_) { /* skip malformed lines */ }
+  }
+}
+
+// ── Generate ──────────────────────────────────────────────────────────────────
+
+function setStatus(msg, cls = '') {
+  const el = document.getElementById('status-bar');
+  el.textContent = msg;
+  el.className   = cls;
+}
+
+async function generate() {
+  const productName = document.getElementById('product-name').value.trim();
+  const category    = document.getElementById('category').value;
+  const description = document.getElementById('description').value.trim();
+  const persona     = document.getElementById('persona').value;
+
+  // Validate
+  if (!productName)      { setStatus('Product name is required.', 'err'); return; }
+  if (!description)      { setStatus('Product description is required.', 'err'); return; }
+  if (!state.rating)     { setStatus('Please select a star rating.', 'err'); return; }
+  if (!state.openaiKey)  { setStatus('No OpenAI API key provided.', 'err'); return; }
+
+  const { systemPrompt, userPrompt } = buildPrompts({
+    productName, category, description,
+    rating: state.rating, tone: state.tone,
+    length: state.length, persona,
+    aspects: state.aspects,
+  });
+
+  // UI: loading state
+  document.getElementById('generate-btn').disabled = true;
+  document.getElementById('output-card').style.display = 'block';
+  document.getElementById('output-stars').textContent  = '★'.repeat(state.rating) + '☆'.repeat(5 - state.rating);
+
+  const pre = document.createElement('pre');
+  document.getElementById('output-body').innerHTML = '';
+  document.getElementById('output-body').appendChild(pre);
+  setStatus('Streaming…');
+
+  let fullText    = '';
+  let interrupted = false;
+
+  const onToken = (tok) => {
+    fullText += tok;
+    pre.textContent = fullText;
+  };
+
+  // Retry once on 5xx / network error
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await streamOpenAI({
+        key: state.openaiKey, model: state.model,
+        systemPrompt, userPrompt, onToken,
+      });
+      break; // success
+    } catch (err) {
+      if (attempt === 1 && (err.message.includes('5') || err.message.toLowerCase().includes('network'))) {
+        setStatus('Retrying after error…', 'warn');
+        await new Promise(r => setTimeout(r, 1000));
+        fullText    = '';
+        pre.textContent = '';
+        continue;
+      }
+      // Final failure
+      interrupted = true;
+      setStatus(`Error: ${err.message}`, 'err');
+      break;
+    }
+  }
+
+  // Render markdown
+  if (fullText) {
+    const raw = DOMPurify.sanitize(marked.parse(fullText));
+    const div = document.createElement('div');
+    div.innerHTML = raw;
+    document.getElementById('output-body').innerHTML = '';
+    document.getElementById('output-body').appendChild(div);
+
+    if (interrupted) {
+      const warn = document.createElement('p');
+      warn.style.cssText = 'color:var(--yellow);margin-top:10px;font-size:12px;';
+      warn.textContent   = '⚠ Stream interrupted — review may be incomplete.';
+      document.getElementById('output-body').appendChild(warn);
+    }
+  }
+
+  if (!interrupted) setStatus('');
+  document.getElementById('generate-btn').disabled = false;
+}
+
+// ── Copy ──────────────────────────────────────────────────────────────────────
+
+function copyReview() {
+  const text = document.getElementById('output-body').innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.output-copy');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+(function init() {
+  renderFamilySeg();
+  renderModelRadio();
+  initStars();
+  renderAspects();
+})();
+</script>
+</body>
+</html>
