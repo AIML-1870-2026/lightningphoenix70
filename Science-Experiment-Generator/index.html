@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Science Experiment Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+:root {
+  --bg:      #0d0f1a;
+  --bg2:     #13152b;
+  --bg3:     #1c1f3a;
+  --border:  #2d2f55;
+  --accent:  #60c8ff;
+  --pink:    #f472b6;
+  --blue:    #60c8ff;
+  --yellow:  #fde047;
+  --purple:  #c084fc;
+  --text:    #f0e6ff;
+  --muted:   #9b8fc0;
+  --green:   #34d399;
+  --red:     #f87171;
+  --radius:  10px;
+  --mono:    'Consolas','Monaco','Courier New',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 10%, rgba(244,114,182,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(96,200,255,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 40%, rgba(192,132,252,0.05) 0%, transparent 40%);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---- Privacy Banner ---- */
+#privacy-banner {
+  background: linear-gradient(90deg, rgba(244,114,182,0.12), rgba(96,200,255,0.12));
+  border-bottom: 1px solid rgba(244,114,182,0.25);
+  padding: 7px 20px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+#privacy-banner strong { color: var(--pink); }
+
+/* ---- Header ---- */
+header {
+  background: linear-gradient(90deg, #16183a 0%, #1a1040 50%, #16183a 100%);
+  border-bottom: 1px solid rgba(244,114,182,0.3);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  height: 58px;
+}
+header h1 {
+  font-size: 1.2rem;
+  font-weight: 800;
+  background: linear-gradient(90deg, var(--pink), var(--blue), var(--yellow));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.01em;
+}
+
+/* ---- App ---- */
+#app { max-width: 960px; margin: 0 auto; padding: 20px 24px; }
+
+/* ---- Card ---- */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  box-shadow: 0 2px 18px rgba(244,114,182,0.05), 0 1px 6px rgba(96,200,255,0.05);
+}
+.card-head {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.card-head:hover { color: var(--text); }
+.card-body { padding: 16px; }
+.card-body.hidden { display: none; }
+
+/* ---- Form Controls ---- */
+label.field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pink);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 6px;
+}
+select, textarea, input[type="password"], input[type="text"] {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid rgba(96,200,255,0.25);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+select:focus, textarea:focus, input[type="password"]:focus, input[type="text"]:focus {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px rgba(244,114,182,0.15);
+}
+textarea { resize: vertical; line-height: 1.65; }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+.form-group { margin-bottom: 14px; }
+.form-group:last-child { margin-bottom: 0; }
+
+/* ---- Key Row ---- */
+.key-row { display: flex; gap: 6px; align-items: center; }
+.key-row select, .key-row input { flex: 1; }
+.btn-icon {
+  background: var(--bg3);
+  border: 1px solid rgba(96,200,255,0.25);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 9px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.btn-icon:hover { color: var(--blue); border-color: var(--blue); }
+.file-label {
+  background: var(--bg3);
+  border: 1px solid rgba(253,224,71,0.3);
+  border-radius: 8px;
+  color: var(--yellow);
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.file-label:hover { background: rgba(253,224,71,0.1); border-color: var(--yellow); }
+.key-hint { font-size: 11px; margin-top: 5px; min-height: 15px; }
+.key-hint.ok { color: var(--green); }
+.key-hint.warn { color: var(--yellow); }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary {
+  background: linear-gradient(135deg, var(--pink), #a855f7);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 14px rgba(244,114,182,0.35);
+}
+.btn.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fb7acd, #c084fc);
+  box-shadow: 0 4px 20px rgba(244,114,182,0.5);
+  transform: translateY(-1px);
+}
+.btn.danger { border-color: var(--red); color: var(--red); }
+.btn.danger:hover:not(:disabled) { background: rgba(248,113,113,0.1); }
+.btn.sm { padding: 4px 10px; font-size: 12px; }
+
+.action-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.status-text { font-size: 12px; color: var(--muted); }
+
+/* ---- Output Panel ---- */
+#output-panel { display: none; }
+
+.resp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(244,114,182,0.2);
+  background: linear-gradient(90deg, rgba(244,114,182,0.08), rgba(96,200,255,0.08));
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.badge-easy   { background: rgba(52,211,153,0.15);  color: #6ee7b7; border: 1px solid rgba(52,211,153,0.4); }
+.badge-medium { background: rgba(253,224,71,0.15);   color: var(--yellow); border: 1px solid rgba(253,224,71,0.4); }
+.badge-hard   { background: rgba(244,114,182,0.15);  color: var(--pink);  border: 1px solid rgba(244,114,182,0.4); }
+.badge-loading { background: rgba(96,200,255,0.12); color: var(--blue);  border: 1px solid rgba(96,200,255,0.3); }
+.badge-error   { background: rgba(248,113,113,0.12); color: var(--red);   border: 1px solid rgba(248,113,113,0.3); }
+
+.resp-body {
+  padding: 20px;
+  background: var(--bg2);
+  border-radius: 0 0 var(--radius) var(--radius);
+  line-height: 1.75;
+}
+
+/* Markdown styles within resp-body */
+.resp-body h1 { color: var(--pink); margin: 0.8em 0 0.4em; }
+.resp-body h2 { color: var(--blue); margin: 0.8em 0 0.4em; }
+.resp-body h3 { color: var(--yellow); margin: 0.7em 0 0.35em; }
+.resp-body h4 { color: var(--purple); margin: 0.7em 0 0.35em; }
+.resp-body p { margin: 0.5em 0; }
+.resp-body ul, .resp-body ol { padding-left: 1.4em; margin: 0.5em 0; }
+.resp-body li { margin: 0.2em 0; }
+.resp-body strong { color: #fde7f7; }
+.resp-body code {
+  background: rgba(253,224,71,0.1);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--yellow);
+}
+.resp-body hr { border: none; border-top: 1px solid rgba(244,114,182,0.2); margin: 1em 0; }
+
+/* ---- Loading dots ---- */
+@keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
+.loading-dots::after { content: '.'; animation: dots 1.2s infinite; }
+
+/* ---- Error ---- */
+.error-box {
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.3);
+  border-radius: 6px;
+  padding: 12px 16px;
+  color: var(--red);
+  font-size: 13px;
+}
+
+/* ---- History ---- */
+#history-list { display: flex; flex-direction: column; gap: 10px; }
+.hist-item {
+  background: var(--bg3);
+  border: 1px solid rgba(96,200,255,0.18);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.hist-item:hover { border-color: rgba(244,114,182,0.35); }
+.hist-item-head {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.hist-item-head:hover { background: rgba(244,114,182,0.06); }
+.hist-title { font-weight: 600; font-size: 13px; flex: 1; color: var(--text); }
+.hist-meta { font-size: 11px; color: var(--blue); }
+.hist-body {
+  padding: 16px;
+  border-top: 1px solid rgba(96,200,255,0.15);
+  display: none;
+  line-height: 1.75;
+}
+.hist-body.open { display: block; }
+.hist-body h1 { color: var(--pink);   margin: 0.8em 0 0.4em; }
+.hist-body h2 { color: var(--blue);   margin: 0.8em 0 0.4em; }
+.hist-body h3 { color: var(--yellow); margin: 0.7em 0 0.35em; }
+.hist-body h4 { color: var(--purple); margin: 0.7em 0 0.35em; }
+.hist-body p { margin: 0.5em 0; }
+.hist-body ul, .hist-body ol { padding-left: 1.4em; margin: 0.5em 0; }
+.hist-body li { margin: 0.2em 0; }
+.hist-body strong { color: #fde7f7; }
+.hist-body code {
+  background: rgba(253,224,71,0.1);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--yellow);
+}
+.hist-body hr { border: none; border-top: 1px solid rgba(244,114,182,0.2); margin: 1em 0; }
+
+#history-empty { font-size: 13px; color: var(--muted); text-align: center; padding: 20px 0; }
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3e4462; }
+</style>
+</head>
+<body>
+
+<!-- Privacy Banner -->
+<div id="privacy-banner">
+  🔒 <strong>Your API key is never stored.</strong> It lives in memory only and is cleared when you close or refresh this page.
+</div>
+
+<!-- Header -->
+<header>
+  <h1>🧪 Science Experiment Generator</h1>
+</header>
+
+<!-- App -->
+<div id="app">
+
+  <!-- API Key -->
+  <div class="card">
+    <div class="card-head" onclick="toggleCard('key-body','key-chev')">
+      <span>🔑 OpenAI API Key</span>
+      <span id="key-chev">▾</span>
+    </div>
+    <div class="card-body" id="key-body">
+      <div class="form-group">
+        <div class="key-row">
+          <input type="password" id="key-input" placeholder="sk-..." autocomplete="off" oninput="onKeyInput()" />
+          <button class="btn-icon" onclick="toggleKeyVis()" title="Show / hide">👁</button>
+          <label class="file-label" title="Load from .env file">
+            📂 Load .env
+            <input type="file" accept=".env,.txt,text/plain" style="display:none" onchange="loadKeyFile(event)" />
+          </label>
+        </div>
+        <div class="key-hint" id="key-hint"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inputs -->
+  <div class="card">
+    <div class="card-head" style="cursor:default; pointer-events:none;">
+      <span>⚗️ Experiment Settings</span>
+    </div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="field-label" for="grade-select">Grade Level</label>
+          <select id="grade-select">
+            <option value="Kindergarten">Kindergarten</option>
+            <option value="1st Grade">1st Grade</option>
+            <option value="2nd Grade">2nd Grade</option>
+            <option value="3rd Grade">3rd Grade</option>
+            <option value="4th Grade">4th Grade</option>
+            <option value="5th Grade" selected>5th Grade</option>
+            <option value="6th Grade">6th Grade</option>
+            <option value="7th Grade">7th Grade</option>
+            <option value="8th Grade">8th Grade</option>
+            <option value="9th Grade">9th Grade</option>
+            <option value="10th Grade">10th Grade</option>
+            <option value="11th Grade">11th Grade</option>
+            <option value="12th Grade">12th Grade</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="field-label" for="model-select">OpenAI Model</label>
+          <select id="model-select">
+            <option value="gpt-4o">gpt-4o</option>
+            <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+            <option value="gpt-4-turbo">gpt-4-turbo</option>
+            <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="field-label" for="supplies-input">Available Supplies</label>
+        <textarea id="supplies-input" rows="4" placeholder="e.g., baking soda, vinegar, balloons, string, food coloring, measuring cups..."></textarea>
+      </div>
+      <div class="action-row">
+        <button class="btn primary" id="generate-btn" onclick="generateExperiment()">Generate Experiment</button>
+        <span class="status-text" id="status-text"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Output -->
+  <div id="output-panel">
+    <div class="resp-head">
+      <span class="badge badge-loading" id="diff-badge">—</span>
+      <span id="resp-title" style="font-weight:600; font-size:13px; flex:1"></span>
+      <span style="font-size:11px; color:var(--muted)" id="resp-time"></span>
+    </div>
+    <div class="resp-body" id="resp-body"></div>
+  </div>
+
+  <!-- History -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-head" onclick="toggleCard('hist-body','hist-chev')">
+      <span>📋 Experiment History <span id="hist-count" style="font-weight:400;color:var(--muted);font-size:11px;text-transform:none;letter-spacing:0">(0 this session)</span></span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn sm danger" onclick="clearHistory(event)">Clear History</button>
+        <span id="hist-chev">▾</span>
+      </div>
+    </div>
+    <div class="card-body" id="hist-body">
+      <div id="history-empty">No experiments generated yet.</div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────────────────────
+const State = {
+  apiKey:  '',
+  history: [],   // [{title, grade, difficulty, html, index}]
+};
+
+// ── UI Helpers ────────────────────────────────────────────────────────────────
+
+function toggleCard(bodyId, chevId) {
+  const body = document.getElementById(bodyId);
+  const chev = document.getElementById(chevId);
+  const nowHidden = body.classList.toggle('hidden');
+  chev.textContent = nowHidden ? '▸' : '▾';
+}
+
+function toggleKeyVis() {
+  const el = document.getElementById('key-input');
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function onKeyInput() {
+  const val = document.getElementById('key-input').value.trim();
+  State.apiKey = val;
+  const hint = document.getElementById('key-hint');
+  if (!val) { hint.textContent = ''; hint.className = 'key-hint'; return; }
+  const ok = val.startsWith('sk-') && !val.startsWith('sk-ant-');
+  hint.textContent = ok ? '✓ Key format looks valid' : '⚠ Unexpected key format — double-check before sending';
+  hint.className = 'key-hint ' + (ok ? 'ok' : 'warn');
+}
+
+function loadKeyFile(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch(_) {}
+
+    const m = text.match(/OPENAI_API_KEY\s*=\s*([^\s\n"']+)/);
+    if (m) {
+      document.getElementById('key-input').value = m[1];
+      onKeyInput();
+      return;
+    }
+    if (parsed && (parsed.OPENAI_API_KEY || parsed.openai_api_key)) {
+      document.getElementById('key-input').value = parsed.OPENAI_API_KEY || parsed.openai_api_key;
+      onKeyInput();
+      return;
+    }
+    const raw = text.trim();
+    if (raw.startsWith('sk-') && !raw.startsWith('sk-ant-')) {
+      document.getElementById('key-input').value = raw;
+      onKeyInput();
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
+function setStatus(msg) {
+  document.getElementById('status-text').textContent = msg;
+}
+
+function diffBadgeClass(difficulty) {
+  const d = (difficulty || '').toLowerCase();
+  if (d.includes('easy'))   return 'badge-easy';
+  if (d.includes('hard'))   return 'badge-hard';
+  if (d.includes('medium')) return 'badge-medium';
+  return 'badge-loading';
+}
+
+function extractTitle(markdown) {
+  const m = markdown.match(/^#+\s+(.+)/m);
+  return m ? m[1].trim() : null;
+}
+
+function extractDifficulty(markdown) {
+  const m = markdown.match(/\*{0,2}difficulty\s*(?:rating)?[:\s]*\*{0,2}\s*([^\n*]+)/i);
+  if (m) return m[1].trim().replace(/\*+/g, '');
+  if (/\beasy\b/i.test(markdown))   return 'Easy';
+  if (/\bmedium\b/i.test(markdown)) return 'Medium';
+  if (/\bhard\b/i.test(markdown))   return 'Hard';
+  return null;
+}
+
+// ── API Call ──────────────────────────────────────────────────────────────────
+
+async function callOpenAI(model, messages) {
+  const key = State.apiKey;
+  if (!key) throw { type: 'no_key', msg: 'No API key provided. Add your OpenAI key in the API Key panel above.' };
+
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), 45000);
+  const t0   = Date.now();
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:  'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model, messages }),
+      signal:  ctrl.signal,
+    });
+    clearTimeout(tid);
+
+    if (res.status === 401) throw { type: 'auth', msg: 'Invalid API key. Please check your key and try again.' };
+    if (res.status === 429) {
+      const ra = res.headers.get('Retry-After');
+      throw { type: 'rate', msg: 'Rate limit reached.' + (ra ? ` Retry after ${ra}s.` : ' Please wait and try again.') };
+    }
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw { type: 'api', msg: (d.error && d.error.message) || `API error ${res.status}` };
+    }
+
+    const data = await res.json();
+    return { text: data.choices[0].message.content, latencyMs: Date.now() - t0 };
+  } catch(e) {
+    clearTimeout(tid);
+    if (e.name === 'AbortError') throw { type: 'timeout', msg: 'Request timed out after 45 seconds.' };
+    if (e.type) throw e;
+    throw { type: 'network', msg: 'Network error. Check your connection and try again.' };
+  }
+}
+
+// ── Generate ──────────────────────────────────────────────────────────────────
+
+async function generateExperiment() {
+  const grade    = document.getElementById('grade-select').value;
+  const supplies = document.getElementById('supplies-input').value.trim();
+  const model    = document.getElementById('model-select').value;
+
+  if (!supplies) {
+    setStatus('Please enter your available supplies.');
+    return;
+  }
+
+  const systemPrompt = `You are a creative science educator. Generate a single science experiment appropriate for a ${grade} student.
+
+Requirements:
+- Use ONLY the materials listed by the user (you may use a subset).
+- Assign a difficulty rating (Easy, Medium, or Hard) based on the complexity relative to the grade level.
+- Structure your response with these sections in order:
+  1. Experiment title (as a top-level heading)
+  2. Difficulty: [Easy / Medium / Hard]
+  3. Objective
+  4. Materials Needed
+  5. Step-by-Step Instructions (numbered list)
+  6. Expected Results
+- Format using Markdown: headings, bold labels, numbered and bulleted lists.
+- Keep the language and complexity appropriate for ${grade}.`;
+
+  const userMessage = `Grade Level: ${grade}\n\nAvailable Supplies:\n${supplies}`;
+
+  // Loading state
+  const panel = document.getElementById('output-panel');
+  panel.style.display = 'block';
+  document.getElementById('diff-badge').className   = 'badge badge-loading';
+  document.getElementById('diff-badge').textContent = 'Generating…';
+  document.getElementById('resp-title').textContent  = '';
+  document.getElementById('resp-time').textContent   = '';
+  document.getElementById('resp-body').innerHTML     = '<span class="loading-dots">Generating your experiment</span>';
+  document.getElementById('generate-btn').disabled   = true;
+  setStatus('');
+
+  try {
+    const r = await callOpenAI(model, [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: userMessage  },
+    ]);
+
+    const mdText     = r.text;
+    const html       = marked.parse(mdText);
+    const title      = extractTitle(mdText)      || `Experiment #${State.history.length + 1}`;
+    const difficulty = extractDifficulty(mdText) || '—';
+
+    // Render output
+    document.getElementById('resp-body').innerHTML    = html;
+    document.getElementById('resp-title').textContent  = title;
+    document.getElementById('resp-time').textContent   = `${(r.latencyMs / 1000).toFixed(1)}s`;
+    document.getElementById('diff-badge').className   = 'badge ' + diffBadgeClass(difficulty);
+    document.getElementById('diff-badge').textContent = difficulty;
+
+    // Save to history
+    addToHistory({ title, grade, difficulty, html, index: State.history.length + 1 });
+
+  } catch(err) {
+    const msg = (err && err.msg) ? err.msg : 'An unexpected error occurred.';
+    document.getElementById('diff-badge').className   = 'badge badge-error';
+    document.getElementById('diff-badge').textContent = 'Error';
+    document.getElementById('resp-body').innerHTML    = `<div class="error-box">${escapeHtml(msg)}</div>`;
+    document.getElementById('resp-title').textContent  = '';
+  } finally {
+    document.getElementById('generate-btn').disabled = false;
+  }
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+
+function addToHistory(entry) {
+  State.history.unshift(entry);
+  renderHistory();
+}
+
+function renderHistory() {
+  const list  = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  const count = document.getElementById('hist-count');
+  const n = State.history.length;
+
+  count.textContent = `(${n} this session)`;
+
+  if (n === 0) {
+    empty.style.display = 'block';
+    list.innerHTML = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.innerHTML = State.history.map((e, i) => `
+    <div class="hist-item">
+      <div class="hist-item-head" onclick="toggleHistItem(${i})">
+        <span class="badge ${diffBadgeClass(e.difficulty)}">${escapeHtml(e.difficulty)}</span>
+        <span class="hist-title">${escapeHtml(e.title)}</span>
+        <span class="hist-meta">${escapeHtml(e.grade)}</span>
+        <span style="color:var(--muted);font-size:13px" id="hist-chev-${i}">▸</span>
+      </div>
+      <div class="hist-body" id="hist-body-${i}">${e.html}</div>
+    </div>
+  `).join('');
+}
+
+function toggleHistItem(i) {
+  const body = document.getElementById(`hist-body-${i}`);
+  const chev = document.getElementById(`hist-chev-${i}`);
+  const open = body.classList.toggle('open');
+  chev.textContent = open ? '▾' : '▸';
+}
+
+function clearHistory(evt) {
+  evt.stopPropagation();
+  if (State.history.length === 0) return;
+  if (!confirm('Clear all experiment history for this session?')) return;
+  State.history = [];
+  renderHistory();
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Ctrl+Enter shortcut on supplies textarea
+document.getElementById('supplies-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generateExperiment();
+});
+</script>
+</body>
+</html>
